@@ -1,4 +1,4 @@
-import { parseServerInfo, parseUrlParams, createTlsConfig, createTransportConfig, parseBool } from '../../utils.js';
+import { parseServerInfo, parseUrlParams, createTlsConfig, createTransportConfig, needsTransport, parseBool } from '../../utils.js';
 
 export function parseVless(url) {
     const { addressPart, params, name } = parseUrlParams(url);
@@ -12,7 +12,8 @@ export function parseVless(url) {
             fingerprint: 'chrome'
         };
     }
-    const transport = params.type !== 'tcp' ? createTransportConfig(params) : undefined;
+    // tcp alone needs no transport, but tcp + headerType=http does (#HTTP obfuscation)
+    const transport = needsTransport(params) ? createTransportConfig(params) : undefined;
 
     // `udp` is a Clash-only flag; ClashConfigBuilder reads it, SingboxConfigBuilder strips it.
     const udp = params.udp !== undefined ? parseBool(params.udp) : undefined;

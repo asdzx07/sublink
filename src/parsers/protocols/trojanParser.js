@@ -1,4 +1,4 @@
-import { parseServerInfo, parseUrlParams, createTlsConfig, createTransportConfig } from '../../utils.js';
+import { parseServerInfo, parseUrlParams, createTlsConfig, createTransportConfig, needsTransport } from '../../utils.js';
 
 export function parseTrojan(url) {
     const { addressPart, params, name } = parseUrlParams(url);
@@ -9,7 +9,7 @@ export function parseTrojan(url) {
     // Trojan requires TLS by protocol design
     if (!params.security) params.security = 'tls';
     const tls = createTlsConfig(params);
-    const transport = params.type !== 'tcp' ? createTransportConfig(params) : undefined;
+    const transport = needsTransport(params) ? createTransportConfig(params) : undefined;
     return {
         type: 'trojan',
         tag: name,
