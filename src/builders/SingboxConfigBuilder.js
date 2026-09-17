@@ -12,6 +12,20 @@ const ANYTLS_OPTION_KEYS = {
     'idle-session-timeout': 'idle_session_timeout',
     'min-idle-session': 'min_idle_session'
 };
+// Removed from every inbound in 1.13: sniffing and the domain strategy now live
+// in route rule actions.
+const INBOUND_REMOVED_KEYS = ['sniff', 'sniff_timeout', 'sniff_override_destination', 'domain_strategy', 'udp_disable_domain_unmapping'];
+// Removed from sing-box TUN inbounds: stack (1.15 replaces it with sing-tun's own
+// stack), GSO (never applied to transparent proxies) and the split address fields
+// merged into address/route_address/route_exclude_address in 1.12.
+const TUN_REMOVED_KEYS = ['stack', 'gso', 'gso_max_size'];
+const TUN_ADDRESS_MERGES = {
+    address: ['inet4_address', 'inet6_address'],
+    route_address: ['inet4_route_address', 'inet6_route_address'],
+    route_exclude_address: ['inet4_route_exclude_address', 'inet6_route_exclude_address']
+};
+const MODERN_HTTP_CLIENT_TIER = '1.14';
+const LEGACY_CONFIG_TIER = '1.11';
 
 export class SingboxConfigBuilder extends BaseConfigBuilder {
     constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, singboxVersion = '1.12', includeAutoSelect = true) {
@@ -40,7 +54,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      */
     isCompatibleProviderFormat(format) {
         // outbound_providers only supported in Sing-Box 1.12+
-        if (this.singboxVersion === '1.11') {
+        if (this.singboxVersion === LEGACY_CONFIG_TIER) {
             return false;
         }
         return format === 'singbox';
@@ -539,21 +553,25 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     }
 
     /**
-     * Pin remote rule-set downloads to DIRECT so fetching never depends on a
-     * proxy that may not be up yet (issue #408). sing-box 1.14 deprecates both
-     * the implicit default HTTP client and the download_detour field (removed
-     * in 1.16, issue #401), so >=1.14 gets an explicit shared HTTP client
-     * while older versions get the legacy per-rule-set field.
+     * Keep remote rule-set downloads off any proxy (issue #408). sing-box 1.14
+     * deprecates the implicit default HTTP client and the download_detour field
+     * (removed in 1.16, issue #401), so >=1.14 gets an explicit shared HTTP
+     * client. An HTTP client without a detour already dials directly, which is
+     * also why sing-box >=1.12 rejects "detour to an empty direct outbound".
+     * Only the pre-1.12 tier can still pin downloads through download_detour.
      */
     configureRuleSetDownload() {
-        if (this.singboxVersion === '1.14') {
+        if (this.singboxVersion === MODERN_HTTP_CLIENT_TIER) {
             if (this.config.route.default_http_client) {
                 return;
             }
             if (!Array.isArray(this.config.http_clients) || this.config.http_clients.length === 0) {
-                this.config.http_clients = [{ tag: RULE_SET_HTTP_CLIENT_TAG, detour: 'DIRECT' }];
+                this.config.http_clients = [{ tag: RULE_SET_HTTP_CLIENT_TAG }];
             }
             this.config.route.default_http_client = this.config.http_clients[0].tag;
+            return;
+        }
+        if (this.singboxVersion !== LEGACY_CONFIG_TIER) {
             return;
         }
         this.config.route.rule_set.forEach(ruleSet => {
@@ -563,12 +581,121 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    isEmptyDirectOutbound(outbound) {
+        return outbound?.type === 'direct'
+            && Object.keys(outbound).every(key => key === 'type' || key === 'tag');
+    }
+
+    /**
+     * sing-box >=1.12 fails config validation with "detour to an empty direct
+     * outbound makes no sense": a bare direct outbound is already the default
+     * dialer, so the detour is dropped instead of losing the connection. Legacy
+     * DNS servers are exempt because there an omitted detour means the default
+     * outbound, not a direct dial.
+     */
+    dropDetoursToEmptyDirect() {
+        const emptyDirectTags = new Set(
+            (this.config.outbounds || [])
+                .filter(outbound => this.isEmptyDirectOutbound(outbound))
+                .map(outbound => outbound.tag)
+                .filter(Boolean)
+        );
+        if (emptyDirectTags.size === 0) {
+            return;
+        }
+
+        this.config.http_clients?.forEach(client => {
+            if (client && emptyDirectTags.has(client.detour)) {
+                delete client.detour;
+            }
+        });
+        this.config.dns?.servers?.forEach(server => {
+            if (emptyDirectTags.has(server?.detour)) {
+                delete server.detour;
+            }
+        });
+        const clashApi = this.config.experimental?.clash_api;
+        if (clashApi && emptyDirectTags.has(clashApi.external_ui_download_detour)) {
+            delete clashApi.external_ui_download_detour;
+        }
+    }
+
+    /**
+     * Strip TUN fields sing-box no longer accepts and fold the split inet4/inet6
+     * address options back into their unified counterparts (merged in 1.12).
+     * Runs on every tier because those fields are optional everywhere they are
+     * still accepted, while >=1.15 rejects the deprecated ones outright.
+     */
+    sanitizeLegacyInbounds() {
+        if (!Array.isArray(this.config.inbounds) || this.config.inbounds.length === 0) {
+            return;
+        }
+
+        const appendAddresses = (inbound, targetKey, legacyKeys) => {
+            const merged = legacyKeys.flatMap(key => {
+                if (inbound[key] === undefined) return [];
+                const value = Array.isArray(inbound[key]) ? inbound[key] : [inbound[key]];
+                delete inbound[key];
+                return value;
+            });
+            if (merged.length === 0) return;
+            const current = inbound[targetKey];
+            inbound[targetKey] = [
+                ...(current === undefined ? [] : Array.isArray(current) ? current : [current]),
+                ...merged
+            ];
+        };
+
+        this.config.inbounds = this.config.inbounds.map(inbound => {
+            if (!inbound || typeof inbound !== 'object') return inbound;
+            const sanitized = { ...inbound };
+            INBOUND_REMOVED_KEYS.forEach(key => delete sanitized[key]);
+            if (sanitized.type !== 'tun') return sanitized;
+            TUN_REMOVED_KEYS.forEach(key => delete sanitized[key]);
+            Object.entries(TUN_ADDRESS_MERGES).forEach(([targetKey, legacyKeys]) => {
+                appendAddresses(sanitized, targetKey, legacyKeys);
+            });
+            return sanitized;
+        });
+    }
+
+    /**
+     * 1.14 replaced store_rdrc/rdrc_timeout with store_dns (full DNS cache) and
+     * made the per-transport DNS cache unconditional, dropping independent_cache.
+     * Persisting the DNS cache also avoids a cold resolution round after restart.
+     */
+    migrateModernDnsConfig() {
+        if (this.config.dns && this.config.dns.independent_cache !== undefined) {
+            delete this.config.dns.independent_cache;
+        }
+
+        const cacheFile = this.config.experimental?.cache_file;
+        if (!cacheFile || typeof cacheFile !== 'object') return;
+        delete cacheFile.rdrc_timeout;
+        delete cacheFile.store_rdrc;
+        if (cacheFile.store_dns === undefined) {
+            cacheFile.store_dns = true;
+        }
+    }
+
+    applyDeprecationMigrations() {
+        this.sanitizeLegacyInbounds();
+        if (this.singboxVersion === LEGACY_CONFIG_TIER) {
+            return;
+        }
+        this.dropDetoursToEmptyDirect();
+        if (this.singboxVersion === MODERN_HTTP_CLIENT_TIER) {
+            this.migrateModernDnsConfig();
+        }
+    }
+
     formatConfig() {
         const rules = generateRules(this.selectedRules, this.customRules);
         const { site_rule_sets, ip_rule_sets } = generateRuleSets(this.selectedRules, this.customRules);
 
         this.config.route.rule_set = [...site_rule_sets, ...ip_rule_sets];
         this.configureRuleSetDownload();
+        this.applyDeprecationMigrations();
 
         // Add outbound_providers if we have any
         if (this.providerUrls.length > 0) {
@@ -660,7 +787,6 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             const defaultExternalUiDownloadUrl = "https://gh-proxy.com/https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip";
             const defaultExternalUi = "./ui";
             const defaultSecret = "";
-            const defaultDownloadDetour = "DIRECT";
             const defaultClashMode = "rule";
 
             this.config.experimental = this.config.experimental || {};
@@ -670,15 +796,16 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             const externalUiDownloadUrl = this.externalUiDownloadUrl || existingClashApi.external_ui_download_url || defaultExternalUiDownloadUrl;
             const externalUi = existingClashApi.external_ui || defaultExternalUi;
             const secret = existingClashApi.secret ?? defaultSecret;
-            const externalUiDownloadDetour = existingClashApi.external_ui_download_detour || defaultDownloadDetour;
             const clashMode = existingClashApi.default_mode || defaultClashMode;
 
+            // external_ui_download_detour is intentionally not defaulted: an
+            // omitted detour already downloads directly, while pointing it at the
+            // empty DIRECT outbound is rejected by sing-box >=1.12.
             this.config.experimental.clash_api = {
                 ...existingClashApi,
                 external_controller: externalController,
                 external_ui: externalUi,
                 external_ui_download_url: externalUiDownloadUrl,
-                external_ui_download_detour: externalUiDownloadDetour,
                 secret,
                 default_mode: clashMode
             };

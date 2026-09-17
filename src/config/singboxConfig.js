@@ -4,24 +4,20 @@
  */
 
 export const SING_BOX_CONFIG = {
+	// Every server is addressed by IP on purpose: hostname-based servers would
+	// need a plaintext bootstrap resolver, which both leaks queries and adds a
+	// round trip before the first real lookup.
 	dns: {
 		servers: [
 			{
-				type: "tcp",
+				type: "https",
 				tag: "dns_proxy",
 				server: "1.1.1.1",
-				detour: "🚀 节点选择",
-				domain_resolver: "dns_resolver"
+				detour: "🚀 节点选择"
 			},
 			{
 				type: "https",
 				tag: "dns_direct",
-				server: "dns.alidns.com",
-				domain_resolver: "dns_resolver"
-			},
-			{
-				type: "udp",
-				tag: "dns_resolver",
 				server: "223.5.5.5"
 			},
 			{
@@ -32,6 +28,14 @@ export const SING_BOX_CONFIG = {
 			}
 		],
 		rules: [
+			{
+				clash_mode: "direct",
+				server: "dns_direct"
+			},
+			{
+				clash_mode: "global",
+				server: "dns_proxy"
+			},
 			{
 				rule_set: "geolocation-!cn",
 				query_type: [
@@ -66,13 +70,13 @@ export const SING_BOX_CONFIG = {
 	},
 	inbounds: [
 		{ type: 'mixed', tag: 'mixed-in', listen: '0.0.0.0', listen_port: 2080 },
-		{ type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true, stack: 'mixed' }
+		{ type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true }
 	],
 	outbounds: [
 		{ type: "direct", tag: 'DIRECT' }
 	],
 	route: {
-		default_domain_resolver: "dns_resolver",
+		default_domain_resolver: "dns_direct",
 		"rule_set": [
 			{
 				"tag": "geosite-geolocation-!cn",
@@ -157,7 +161,7 @@ export const SING_BOX_CONFIG_V1_11 = {
 	},
 	inbounds: [
 		{ type: 'mixed', tag: 'mixed-in', listen: '0.0.0.0', listen_port: 2080 },
-		{ type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true, stack: 'mixed' }
+		{ type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true }
 	],
 	outbounds: [
 		{ type: "direct", tag: 'DIRECT' }
