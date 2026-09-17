@@ -30,6 +30,13 @@ describe('mihomo tun stack', () => {
         expect(config.tun).toMatchObject({ enable: true, stack: 'mips', 'auto-route': true });
         expect(config.tun['dns-hijack']).toEqual(['any:53']);
     });
+
+    it('carries strict-route in the profile so no client switch is needed', async () => {
+        const config = await buildConfig();
+
+        // otherwise the OS is free to answer from the physical adapter's resolver
+        expect(config.tun['strict-route']).toBe(true);
+    });
 });
 
 describe('mihomo dns leak prevention', () => {

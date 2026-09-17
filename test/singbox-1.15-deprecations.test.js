@@ -141,4 +141,47 @@ describe('sing-box generated dns has no leak path', () => {
         );
         expect(result.route.default_domain_resolver).toBe('dns_direct');
     });
+
+    it('never falls back to a resolver reached outside the tunnel', async () => {
+        const result = await build('1.14');
+
+        // the leak test domain is unmatched, so the fallback decides the result
+        expect(result.dns.final).toBe('dns_proxy');
+        const finalServer = result.dns.servers.find(server => server.tag === result.dns.final);
+        expect(finalServer?.detour).toBeDefined();
+        // the old "REFUSED everything but A/AAAA/CNAME" rule broke HTTPS/SVCB (ECH)
+        expect(result.dns.rules.some(rule => rule.action === 'predefined')).toBe(false);
+    });
+
+    it('keeps cn domains on the local resolver, after the foreign rules', async () => {
+        const result = await build('1.14');
+        const cnRule = result.dns.rules.find(rule => Array.isArray(rule.rule_set) && rule.rule_set.includes('cn'));
+
+        expect(cnRule).toMatchObject({ server: 'dns_direct' });
+        expect(result.dns.rules.indexOf(cnRule)).toBe(result.dns.rules.length - 1);
+    });
+
+    it('omits the cn rule when the cn rule sets are not generated', async () => {
+        const builder = new SingboxConfigBuilder(
+            vlessUrl, ['Non-China'], [], null, 'zh-CN', null, false,
+            false, undefined, undefined, '1.14'
+        );
+        const result = await builder.build();
+        const tags = result.route.rule_set.map(ruleSet => ruleSet.tag);
+
+        expect(tags).not.toContain('cn');
+        expect(result.dns.rules.some(rule => Array.isArray(rule.rule_set) && rule.rule_set.includes('cn'))).toBe(false);
+        expect(result.dns.final).toBe('dns_proxy');
+    });
+
+    it('covers ipv6 in the tun so it cannot bypass the tunnel', async () => {
+        for (const version of ['1.11', '1.12', '1.14']) {
+            const result = await build(version);
+            const tun = result.inbounds.find(inbound => inbound.type === 'tun');
+            const addresses = Array.isArray(tun.address) ? tun.address : [tun.address];
+
+            expect(addresses.some(address => address.includes(':')), `tier ${version}`).toBe(true);
+            expect(tun.strict_route, `tier ${version}`).toBe(true);
+        }
+    });
 });
