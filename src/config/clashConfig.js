@@ -25,6 +25,9 @@ export const CLASH_CONFIG = {
 		'stack': 'mips',
 		'auto-route': true,
 		'auto-detect-interface': true,
+		// Kept in the profile instead of relying on a client toggle: without it
+		// the OS may still resolve through the physical adapter's DNS.
+		'strict-route': true,
 		'dns-hijack': [
 			'any:53'
 		]

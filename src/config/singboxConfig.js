@@ -70,7 +70,17 @@ export const SING_BOX_CONFIG = {
 	},
 	inbounds: [
 		{ type: 'mixed', tag: 'mixed-in', listen: '0.0.0.0', listen_port: 2080 },
-		{ type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true }
+		{
+			type: 'tun',
+			tag: 'tun-in',
+			// Both families are required: with an IPv4-only address auto_route
+			// installs no IPv6 default route, so IPv6 traffic (including queries
+			// to the router/ISP resolver) silently bypasses the tunnel whenever
+			// the client has no strict-route switch.
+			address: ['172.19.0.1/30', 'fdfe:dcba:9876::1/126'],
+			auto_route: true,
+			strict_route: true
+		}
 	],
 	outbounds: [
 		{ type: "direct", tag: 'DIRECT' }
@@ -140,11 +150,13 @@ export const SING_BOX_CONFIG_V1_11 = {
 					"CNAME"
 				],
 				invert: true,
-				server: "dns_direct",
+				server: "dns_proxy",
 				disable_cache: true
 			}
 		],
-		final: "dns_direct",
+		// Same reasoning as the current config: unmatched lookups must not be
+		// answered by a resolver reached outside the tunnel.
+		final: "dns_proxy",
 		strategy: "prefer_ipv4",
 		independent_cache: true,
 		fakeip: {
@@ -161,7 +173,14 @@ export const SING_BOX_CONFIG_V1_11 = {
 	},
 	inbounds: [
 		{ type: 'mixed', tag: 'mixed-in', listen: '0.0.0.0', listen_port: 2080 },
-		{ type: 'tun', tag: 'tun-in', address: '172.19.0.1/30', auto_route: true, strict_route: true }
+		{
+			type: 'tun',
+			tag: 'tun-in',
+			// IPv4-only addressing let IPv6 escape the tunnel; see the current config.
+			address: ['172.19.0.1/30', 'fdfe:dcba:9876::1/126'],
+			auto_route: true,
+			strict_route: true
+		}
 	],
 	outbounds: [
 		{ type: "direct", tag: 'DIRECT' }
