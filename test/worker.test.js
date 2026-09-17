@@ -76,7 +76,7 @@ describe('Worker', () => {
         const json = await res.json();
         expect(json?.dns?.servers?.[0]).toHaveProperty('type');
         expect(json?.dns?.servers?.[0]).not.toHaveProperty('address');
-        expect(json?.route).toHaveProperty('default_domain_resolver', 'dns_resolver');
+        expect(json?.route).toHaveProperty('default_domain_resolver', 'dns_direct');
     });
 
     it('GET /clash returns YAML', async () => {
