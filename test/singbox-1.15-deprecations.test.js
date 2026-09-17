@@ -136,10 +136,29 @@ describe('sing-box generated dns has no leak path', () => {
 
         expect(rules[0]).toMatchObject({ clash_mode: 'direct', server: 'dns_direct' });
         expect(rules[1]).toMatchObject({ clash_mode: 'global', server: 'dns_proxy' });
-        expect(rules).toContainEqual(
-            expect.objectContaining({ rule_set: 'geolocation-!cn', server: 'dns_fakeip' })
-        );
+        // the address answer is the catch-all, exactly like the reference template
+        expect(rules[rules.length - 1]).toMatchObject({ query_type: ['A', 'AAAA'], server: 'dns_fakeip' });
         expect(result.route.default_domain_resolver).toBe('dns_direct');
+    });
+
+    it('answers domains no rule set knows with fakeip, not with a real lookup', async () => {
+        const result = await build('1.14');
+        const rules = result.dns.rules;
+
+        // no rule_set restriction: an own CDN hostname or an IP check site still
+        // resolves even when the proxy-side resolver is unreachable
+        expect(rules.filter(rule => rule.server === 'dns_fakeip')).toHaveLength(1);
+        expect(rules[rules.length - 1].rule_set).toBeUndefined();
+    });
+
+    it('names the resolver endpoints so their TLS handshake can succeed', async () => {
+        const result = await build('1.14');
+
+        // a DoH server addressed by IP only serves its certificate for its own name
+        result.dns.servers.filter(server => server.type === 'https').forEach(server => {
+            expect(server.tls, `${server.server} in ${server.tag}`).toMatchObject({ enabled: true });
+            expect(server.tls?.server_name, `${server.server} needs a server_name`).toBeTruthy();
+        });
     });
 
     it('never falls back to a resolver reached outside the tunnel', async () => {
@@ -149,16 +168,44 @@ describe('sing-box generated dns has no leak path', () => {
         expect(result.dns.final).toBe('dns_proxy');
         const finalServer = result.dns.servers.find(server => server.tag === result.dns.final);
         expect(finalServer?.detour).toBeDefined();
-        // the old "REFUSED everything but A/AAAA/CNAME" rule broke HTTPS/SVCB (ECH)
-        expect(result.dns.rules.some(rule => rule.action === 'predefined')).toBe(false);
+        // REFUSED made resolvers retry instead of falling back to A/AAAA
+        expect(result.dns.rules.some(rule => String(rule.rcode).toUpperCase() === 'REFUSED')).toBe(false);
     });
 
-    it('keeps cn domains on the local resolver, after the foreign rules', async () => {
+    it('never hands svcb/ech hints to clients using fakeip', async () => {
         const result = await build('1.14');
-        const cnRule = result.dns.rules.find(rule => Array.isArray(rule.rule_set) && rule.rule_set.includes('cn'));
+        const guardIndex = result.dns.rules.findIndex(rule => Array.isArray(rule.query_type)
+            && rule.query_type.includes('HTTPS'));
+        const fakeipIndex = result.dns.rules.findIndex(rule => rule.server === 'dns_fakeip');
+
+        // real ipv4hint + ECH from Cloudflare's HTTPS records would bypass the
+        // fakeip mapping and break the ECH handshake over the proxy
+        expect(guardIndex).toBeGreaterThanOrEqual(0);
+        expect(result.dns.rules[guardIndex]).toMatchObject({ action: 'predefined', rcode: 'NOERROR' });
+        expect(guardIndex).toBeLessThan(fakeipIndex);
+    });
+
+    it('injects the svcb guard into a base config that lacks it', async () => {
+        const baseConfig = {
+            ...SING_BOX_CONFIG,
+            dns: { ...SING_BOX_CONFIG.dns, rules: [{ clash_mode: 'direct', server: 'dns_direct' }] }
+        };
+
+        const result = await build('1.14', baseConfig);
+
+        expect(result.dns.rules[0]).toMatchObject({ clash_mode: 'direct' });
+        expect(result.dns.rules[1]).toMatchObject({ query_type: ['HTTPS', 'SVCB'], action: 'predefined', rcode: 'NOERROR' });
+    });
+
+    it('keeps cn domains on the local resolver, before the fakeip catch-all', async () => {
+        const result = await build('1.14');
+        const rules = result.dns.rules;
+        const cnRule = rules.find(rule => Array.isArray(rule.rule_set) && rule.rule_set.includes('cn'));
+        const fakeipRule = rules.find(rule => rule.server === 'dns_fakeip');
 
         expect(cnRule).toMatchObject({ server: 'dns_direct' });
-        expect(result.dns.rules.indexOf(cnRule)).toBe(result.dns.rules.length - 1);
+        // otherwise fakeip would pull domestic sites through the tunnel
+        expect(rules.indexOf(cnRule)).toBeLessThan(rules.indexOf(fakeipRule));
     });
 
     it('omits the cn rule when the cn rule sets are not generated', async () => {
