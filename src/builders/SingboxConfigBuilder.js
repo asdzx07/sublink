@@ -678,6 +678,54 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         }
     }
 
+    /**
+     * Keep every lookup either encrypted or inside the tunnel.
+     *
+     * Graphical clients often expose no strict-route switch, and without it the
+     * OS can still query a resolver sitting on the physical adapter. The profile
+     * therefore must not offer a direct fallback: an unmatched domain answered by
+     * a public resolver outside the tunnel is exactly what a DNS leak test
+     * reports. Unmatched lookups go to the encrypted proxy-side resolver, while
+     * CN domains are matched explicitly against the generated `cn` rule sets so
+     * the common case keeps the local fast path.
+     */
+    configureDnsRouting(siteRuleSets = []) {
+        const dns = this.config?.dns;
+        if (!dns || !Array.isArray(dns.servers)) {
+            return;
+        }
+
+        const hasServer = tag => dns.servers.some(server => server?.tag === tag);
+
+        // A user-supplied base config may still carry the old direct fallback.
+        if (hasServer('dns_proxy')) {
+            dns.final = 'dns_proxy';
+        }
+
+        if (!Array.isArray(dns.rules)) {
+            return;
+        }
+
+        // "Answer predefined REFUSED for everything but A/AAAA/CNAME" made
+        // browsers retry on every lookup and broke HTTPS/SVCB records (ECH).
+        // The proxy resolver as fallback already covers those query types.
+        dns.rules = dns.rules.filter(rule => !(rule?.action === 'predefined' && String(rule.rcode).toUpperCase() === 'REFUSED'));
+
+        const availableTags = new Set(siteRuleSets.map(ruleSet => ruleSet?.tag).filter(Boolean));
+        const cnTags = ['geolocation-cn', 'cn'].filter(tag => availableTags.has(tag));
+
+        if (cnTags.length === 0 || !hasServer('dns_direct')) {
+            return;
+        }
+        const alreadyRouted = dns.rules.some(rule => Array.isArray(rule?.rule_set) && rule.rule_set.some(tag => cnTags.includes(tag)));
+        if (alreadyRouted) {
+            return;
+        }
+        // Appended after the geolocation-!cn rules, so a domain classified as
+        // foreign can never be resolved by the local resolver.
+        dns.rules.push({ rule_set: cnTags, server: 'dns_direct' });
+    }
+
     applyDeprecationMigrations() {
         this.sanitizeLegacyInbounds();
         if (this.singboxVersion === LEGACY_CONFIG_TIER) {
@@ -695,6 +743,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
 
         this.config.route.rule_set = [...site_rule_sets, ...ip_rule_sets];
         this.configureRuleSetDownload();
+        this.configureDnsRouting(site_rule_sets);
         this.applyDeprecationMigrations();
 
         // Add outbound_providers if we have any
