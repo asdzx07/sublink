@@ -128,6 +128,59 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         return proxy.name;
     }
 
+    /**
+     * Translate the internal transport object into Mihomo's per-network options.
+     *
+     * Shared by vmess/vless/trojan: each branch used to list these fields by
+     * hand, and a missing branch silently dropped the Host header, the path or
+     * the whole transport, which leaves the node unreachable.
+     */
+    buildTransportFields(transport) {
+        const opts = {
+            'ws-opts': undefined,
+            'http-opts': undefined,
+            'h2-opts': undefined,
+            'grpc-opts': undefined
+        };
+        if (!transport?.type) {
+            return opts;
+        }
+
+        const headers = transport.headers && Object.keys(transport.headers).length > 0
+            ? transport.headers
+            : undefined;
+
+        if (transport.type === 'httpupgrade') {
+            // Mihomo has no httpupgrade network (unknown values fall back to tcp),
+            // it reuses ws-opts together with the v2ray-http-upgrade switch.
+            opts.network = 'ws';
+            opts['ws-opts'] = {
+                path: transport.path,
+                ...(headers || transport.host ? { headers: headers || { host: transport.host } } : {}),
+                'v2ray-http-upgrade': true
+            };
+            return opts;
+        }
+
+        if (transport.type === 'ws') {
+            // ws-opts headers are map[string]string, http-opts headers are
+            // map[string][]string - see how the transport was built.
+            opts['ws-opts'] = { path: transport.path, headers };
+        } else if (transport.type === 'http') {
+            opts['http-opts'] = {
+                method: transport.method || 'GET',
+                path: Array.isArray(transport.path) ? transport.path : [transport.path || '/'],
+                ...(headers ? { headers } : {})
+            };
+        } else if (transport.type === 'h2') {
+            opts['h2-opts'] = { path: transport.path, host: transport.host };
+        } else if (transport.type === 'grpc') {
+            opts['grpc-opts'] = { 'grpc-service-name': transport.service_name };
+        }
+
+        return opts;
+    }
+
     convertProxy(proxy) {
         switch (proxy.type) {
             case 'shadowsocks':
@@ -155,35 +208,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     servername: proxy.tls?.server_name || '',
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     network: proxy.transport?.type || proxy.network || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? {
-                            path: proxy.transport.path,
-                            headers: proxy.transport.headers
-                        }
-                        : undefined,
-                    'http-opts': proxy.transport?.type === 'http'
-                        ? (() => {
-                            const opts = {
-                                method: proxy.transport.method || 'GET',
-                                path: Array.isArray(proxy.transport.path) ? proxy.transport.path : [proxy.transport.path || '/'],
-                            };
-                            if (proxy.transport.headers && Object.keys(proxy.transport.headers).length > 0) {
-                                opts.headers = proxy.transport.headers;
-                            }
-                            return opts;
-                        })()
-                        : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc'
-                        ? {
-                            'grpc-service-name': proxy.transport.service_name
-                        }
-                        : undefined,
-                    'h2-opts': proxy.transport?.type === 'h2'
-                        ? {
-                            path: proxy.transport.path,
-                            host: proxy.transport.host
-                        }
-                        : undefined,
+                    ...this.buildTransportFields(proxy.transport),
                     udp: getClashUdpValue(proxy)
                 };
             case 'vless':
@@ -198,16 +223,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'client-fingerprint': proxy.tls?.utls?.fingerprint,
                     servername: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws' ? {
-                        path: proxy.transport.path,
-                        headers: proxy.transport.headers
-                    } : undefined,
+                    ...this.buildTransportFields(proxy.transport),
                     'reality-opts': proxy.tls?.reality?.enabled ? {
                         'public-key': proxy.tls.reality.public_key,
                         'short-id': proxy.tls.reality.short_id,
-                    } : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc' ? {
-                        'grpc-service-name': proxy.transport.service_name,
                     } : undefined,
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': !!proxy.tls?.insecure,
@@ -248,16 +267,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'client-fingerprint': proxy.tls?.utls?.fingerprint,
                     sni: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws' ? {
-                        path: proxy.transport.path,
-                        headers: proxy.transport.headers
-                    } : undefined,
+                    ...this.buildTransportFields(proxy.transport),
                     'reality-opts': proxy.tls?.reality?.enabled ? {
                         'public-key': proxy.tls.reality.public_key,
                         'short-id': proxy.tls.reality.short_id,
-                    } : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc' ? {
-                        'grpc-service-name': proxy.transport.service_name,
                     } : undefined,
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': !!proxy.tls?.insecure,

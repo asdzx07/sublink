@@ -161,6 +161,18 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         // xudp is default in newer versions
         delete sanitized.packet_encoding;
 
+        // sing-box has no `h2` transport (it was merged into `http`, which takes
+        // the host list and negotiates HTTP/2 over TLS). The rewrite stays here
+        // because Mihomo still needs h2-opts in its own output.
+        if (sanitized.transport?.type === 'h2') {
+            const { host, ...rest } = sanitized.transport;
+            sanitized.transport = {
+                ...rest,
+                type: 'http',
+                ...(host ? { host: Array.isArray(host) ? host : [host] } : {})
+            };
+        }
+
         if (sanitized.type === 'hysteria2') {
             // sing-box names port-hopping/bandwidth fields differently from the
             // share-link shape, and rejects unknown fields outright
