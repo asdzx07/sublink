@@ -65,30 +65,24 @@ export const SING_BOX_CONFIG = {
 				rcode: "NOERROR"
 			},
 			{
-				rule_set: "geolocation-!cn",
+				// Catch-all fakeip, as in the reference template: every address
+				// query the CN rule sets did not claim is answered with a fake IP.
+				// A domain no rule set knows about (own CDN hostnames, IP check
+				// sites) then still resolves instantly and never depends on a real
+				// lookup through the proxy - an unreachable proxy-side resolver is
+				// what silently makes exactly those sites unreachable. The builder
+				// inserts the CN rule right before this one.
 				query_type: [
 					"A",
 					"AAAA"
 				],
 				server: "dns_fakeip"
-			},
-			{
-				rule_set: "geolocation-!cn",
-				query_type: "CNAME",
-				server: "dns_proxy"
-			},
-			{
-				query_type: [
-					"A",
-					"AAAA",
-					"CNAME"
-				],
-				invert: true,
-				action: "predefined",
-				rcode: "REFUSED"
 			}
 		],
-		final: "dns_direct"
+		// Only query types fakeip cannot answer land here, so keep them on the
+		// encrypted proxy-side resolver instead of a public resolver reached
+		// outside the tunnel.
+		final: "dns_proxy"
 	},
 	ntp: {
 		enabled: true,
