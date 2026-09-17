@@ -738,6 +738,40 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             }
         }
 
+        // A DoH/DoT endpoint reached by IP only serves its certificate for its own
+        // name, so a missing server_name fails the handshake and silently breaks
+        // every lookup that depends on that resolver.
+        const wellKnownResolverNames = {
+            '1.1.1.1': 'cloudflare-dns.com',
+            '1.0.0.1': 'cloudflare-dns.com',
+            '8.8.8.8': 'dns.google',
+            '8.8.4.4': 'dns.google',
+            '223.5.5.5': 'dns.alidns.com',
+            '223.6.6.6': 'dns.alidns.com',
+            '119.29.29.29': 'doh.pub'
+        };
+        dns.servers.forEach(server => {
+            if (!server || server.tls?.server_name) {
+                return;
+            }
+            const knownName = wellKnownResolverNames[server.server];
+            if (knownName && ['https', 'tls', 'quic', 'h3'].includes(String(server.type).toLowerCase())) {
+                server.tls = { ...server.tls, enabled: true, server_name: knownName };
+            }
+        });
+
+        // Address queries must be a catch-all: fakeip is what keeps a domain no
+        // rule set knows about (own CDN hostnames, IP check sites) working without
+        // a real lookup through the proxy. Rebuilt rather than appended so a
+        // stored base config with the old geolocation-!cn-scoped rule gets widened.
+        const fakeipTag = dns.servers.find(server => server?.type === 'fakeip')?.tag;
+        if (fakeipTag) {
+            const isAddressQuery = rule => Array.isArray(rule?.query_type)
+                && rule.query_type.some(type => ['A', 'AAAA'].includes(String(type).toUpperCase()));
+            dns.rules = dns.rules.filter(rule => !(isAddressQuery(rule) && rule.server === fakeipTag));
+            dns.rules.push({ query_type: ['A', 'AAAA'], server: fakeipTag });
+        }
+
         const availableTags = new Set(siteRuleSets.map(ruleSet => ruleSet?.tag).filter(Boolean));
         const cnTags = ['geolocation-cn', 'cn'].filter(tag => availableTags.has(tag));
 
@@ -748,9 +782,11 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         if (alreadyRouted) {
             return;
         }
-        // Appended after the geolocation-!cn rules, so a domain classified as
-        // foreign can never be resolved by the local resolver.
-        dns.rules.push({ rule_set: cnTags, server: 'dns_direct' });
+        // Inserted right before the fakeip catch-all, matching the reference
+        // template: a domain in the CN lists must keep real addresses, otherwise
+        // fakeip would drag domestic sites through the tunnel.
+        const fakeipIndex = fakeipTag ? dns.rules.findIndex(rule => rule?.server === fakeipTag) : -1;
+        dns.rules.splice(fakeipIndex === -1 ? dns.rules.length : fakeipIndex, 0, { rule_set: cnTags, server: 'dns_direct' });
     }
 
     applyDeprecationMigrations() {
