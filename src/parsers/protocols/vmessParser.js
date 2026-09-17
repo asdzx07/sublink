@@ -50,10 +50,13 @@ export function parseVmess(url) {
     }
 
     if (networkType === 'ws') {
+        // omit the map entirely when neither host nor sni is set, so the output
+        // does not carry an empty headers object
+        const wsHost = vmessConfig.host || vmessConfig.sni;
         transport = {
             type: 'ws',
             path: vmessConfig.path,
-            headers: { 'host': vmessConfig.host ? vmessConfig.host : vmessConfig.sni }
+            ...(wsHost ? { headers: { 'host': wsHost } } : {})
         };
     } else if ((networkType === 'tcp' && transportType === 'http') || networkType === 'http') {
         const method = vmessConfig.method || 'GET';
