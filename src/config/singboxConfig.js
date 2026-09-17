@@ -8,17 +8,31 @@ export const SING_BOX_CONFIG = {
 	// need a plaintext bootstrap resolver, which both leaks queries and adds a
 	// round trip before the first real lookup.
 	dns: {
+		// The TLS server name is spelled out for the same reason as the IP: these
+		// endpoints only serve their certificate for that name, so dialing them by
+		// IP without it fails the handshake and silently kills every lookup that
+		// depends on the resolver.
 		servers: [
 			{
 				type: "https",
 				tag: "dns_proxy",
 				server: "1.1.1.1",
+				path: "/dns-query",
+				tls: {
+					enabled: true,
+					server_name: "cloudflare-dns.com"
+				},
 				detour: "🚀 节点选择"
 			},
 			{
 				type: "https",
 				tag: "dns_direct",
-				server: "223.5.5.5"
+				server: "223.5.5.5",
+				path: "/dns-query",
+				tls: {
+					enabled: true,
+					server_name: "dns.alidns.com"
+				}
 			},
 			{
 				type: "fakeip",
@@ -145,17 +159,12 @@ export const SING_BOX_CONFIG_V1_11 = {
 		],
 		rules: [
 			{
-				rule_set: "geolocation-!cn",
+				// catch-all fakeip too, so unmatched names never need a real lookup
 				query_type: [
 					"A",
 					"AAAA"
 				],
 				server: "dns_fakeip"
-			},
-			{
-				rule_set: "geolocation-!cn",
-				query_type: "CNAME",
-				server: "dns_proxy"
 			},
 			{
 				query_type: [
