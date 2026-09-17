@@ -309,15 +309,60 @@ export function createTlsConfig(params) {
 	return tls;
 }
 
+// A share link may carry the CDN host as `host`, or only inside `sni`. Every
+// mainstream client treats them as equivalent for the Host header, and the VMess
+// parser already falls back the same way - without it the server rejects the
+// handshake, which is what "node loses its host after conversion" looks like.
+function resolveTransportHost(params) {
+	const value = params?.host || params?.sni;
+	if (Array.isArray(value)) return value[0];
+	return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+}
+
+// `tcp` alone is a plain connection; `tcp` + `headerType=http` is V2Ray's HTTP
+// obfuscation, which both sing-box and Mihomo express as an `http` transport.
+function resolveTransportType(params) {
+	const type = typeof params?.type === 'string' ? params.type.trim().toLowerCase() : '';
+	if (type === 'tcp') {
+		return String(params?.headerType ?? '').trim().toLowerCase() === 'http' ? 'http' : '';
+	}
+	return type === 'none' ? '' : type;
+}
+
+export function needsTransport(params) {
+	return resolveTransportType(params) !== '';
+}
+
 export function createTransportConfig(params) {
-	return {
-		type: params.type,
+	const type = resolveTransportType(params);
+	if (!type) return undefined;
+
+	const host = resolveTransportHost(params);
+	const transport = {
+		type,
 		path: params.path ?? undefined,
-		...(params.host && { 'headers': { 'host': params.host } }),
-		...(params.type === 'grpc' && {
-			service_name: params.serviceName ?? undefined,
-		})
 	};
+
+	if (host && (type === 'ws' || type === 'http')) {
+		// Mihomo types ws headers as map[string]string but http-opts headers as
+		// map[string][]string, so the http case needs a list or it rejects the
+		// whole profile. sing-box accepts a single item in both shapes.
+		transport.headers = { host: type === 'http' ? [host] : host };
+	}
+	if (host && type === 'h2') {
+		// sing-box and Mihomo both expect a host list here, never a header map
+		transport.host = [host];
+	}
+	if (host && type === 'httpupgrade') {
+		// sing-box's httpupgrade takes a plain string host
+		transport.host = host;
+	}
+	if (type === 'grpc') {
+		// some links put the gRPC service name in `path` instead
+		transport.service_name = params.serviceName ?? params.path ?? undefined;
+	}
+
+	return transport;
 }
 
 // Parse boolean value from various formats
