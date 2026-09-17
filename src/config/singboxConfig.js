@@ -37,6 +37,20 @@ export const SING_BOX_CONFIG = {
 				server: "dns_proxy"
 			},
 			{
+				// SVCB/HTTPS answers carry real ipv4hint/ipv6hint plus an ECH config.
+				// Handing those to the browser while fakeip is in use makes it skip
+				// the fake mapping, dial the real hints and attempt ECH through the
+				// proxy - which is how Cloudflare-hosted sites end up unreachable.
+				// Answer "success, no records" (NODATA) so clients fall back to the
+				// A/AAAA answers instead. Not REFUSED: that makes resolvers retry.
+				query_type: [
+					"HTTPS",
+					"SVCB"
+				],
+				action: "predefined",
+				rcode: "NOERROR"
+			},
+			{
 				rule_set: "geolocation-!cn",
 				query_type: [
 					"A",
