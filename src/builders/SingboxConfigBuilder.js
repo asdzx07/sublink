@@ -707,9 +707,24 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         }
 
         // "Answer predefined REFUSED for everything but A/AAAA/CNAME" made
-        // browsers retry on every lookup and broke HTTPS/SVCB records (ECH).
-        // The proxy resolver as fallback already covers those query types.
+        // resolvers retry on every lookup; the fallback resolver already covers
+        // those query types.
         dns.rules = dns.rules.filter(rule => !(rule?.action === 'predefined' && String(rule.rcode).toUpperCase() === 'REFUSED'));
+
+        // SVCB/HTTPS records carry real hints and an ECH config, which would let
+        // the browser bypass the fakeip mapping and fail the ECH handshake on the
+        // proxy path. Answer NODATA so clients stick to A/AAAA. Kept out of the
+        // legacy tier: the predefined action only exists from 1.12.
+        if (this.singboxVersion !== LEGACY_CONFIG_TIER) {
+            const guard = { query_type: ['HTTPS', 'SVCB'], action: 'predefined', rcode: 'NOERROR' };
+            const hasGuard = dns.rules.some(rule => Array.isArray(rule?.query_type)
+                && rule.query_type.some(type => ['HTTPS', 'SVCB'].includes(String(type).toUpperCase())));
+            if (!hasGuard) {
+                // after the clash_mode rules, before any domain or resolver rule
+                const insertAt = dns.rules.findIndex(rule => rule && rule.clash_mode === undefined);
+                dns.rules.splice(insertAt === -1 ? dns.rules.length : insertAt, 0, guard);
+            }
+        }
 
         const availableTags = new Set(siteRuleSets.map(ruleSet => ruleSet?.tag).filter(Boolean));
         const cnTags = ['geolocation-cn', 'cn'].filter(tag => availableTags.has(tag));
