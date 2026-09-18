@@ -137,7 +137,7 @@ describe('sing-box generated dns has no leak path', () => {
         expect(rules[0]).toMatchObject({ clash_mode: 'direct', server: 'dns_direct' });
         expect(rules[1]).toMatchObject({ clash_mode: 'global', server: 'dns_proxy' });
         // the address answer is the catch-all, exactly like the reference template
-        expect(rules[rules.length - 1]).toMatchObject({ query_type: ['A', 'AAAA'], server: 'dns_fakeip' });
+        expect(rules[rules.length - 1]).toMatchObject({ query_type: ['A'], server: 'dns_fakeip' });
         expect(result.route.default_domain_resolver).toBe('dns_direct');
     });
 
@@ -149,6 +149,35 @@ describe('sing-box generated dns has no leak path', () => {
         // resolves even when the proxy-side resolver is unreachable
         expect(rules.filter(rule => rule.server === 'dns_fakeip')).toHaveLength(1);
         expect(rules[rules.length - 1].rule_set).toBeUndefined();
+    });
+
+    it('never fakes ipv6, so the browser stays out of local-network access', async () => {
+        const result = await build('1.14');
+        const fakeipServer = result.dns.servers.find(server => server.type === 'fakeip');
+
+        // a fake IPv6 address can only be ULA (fc00::/7), which browsers classify
+        // as a local-network address and gate behind a permission prompt
+        expect(fakeipServer).not.toHaveProperty('inet6_range');
+        const aaaaRules = result.dns.rules.filter(rule => {
+            const types = Array.isArray(rule.query_type) ? rule.query_type : [rule.query_type];
+            return types.includes('AAAA');
+        });
+        expect(aaaaRules).toHaveLength(1);
+        expect(aaaaRules[0]).toMatchObject({ action: 'predefined', rcode: 'NOERROR' });
+        // and it has to run before the fake address rule
+        expect(result.dns.rules.indexOf(aaaaRules[0]))
+            .toBeLessThan(result.dns.rules.findIndex(rule => rule.server === 'dns_fakeip'));
+    });
+
+    it('filters local names out of the fakeip pool', async () => {
+        const result = await build('1.14');
+        const filter = result.dns.rules.find(rule => Array.isArray(rule.domain_suffix));
+
+        // otherwise a router name or mDNS host would get a fake address
+        expect(filter?.domain_suffix).toEqual(expect.arrayContaining(['.lan', '.local', '.home.arpa']));
+        expect(filter?.server).toBe('dns_direct');
+        expect(result.dns.rules.indexOf(filter))
+            .toBeLessThan(result.dns.rules.findIndex(rule => rule.server === 'dns_fakeip'));
     });
 
     it('names the resolver endpoints so their TLS handshake can succeed', async () => {
