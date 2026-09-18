@@ -760,33 +760,54 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             }
         });
 
-        // Address queries must be a catch-all: fakeip is what keeps a domain no
-        // rule set knows about (own CDN hostnames, IP check sites) working without
-        // a real lookup through the proxy. Rebuilt rather than appended so a
-        // stored base config with the old geolocation-!cn-scoped rule gets widened.
-        const fakeipTag = dns.servers.find(server => server?.type === 'fakeip')?.tag;
-        if (fakeipTag) {
-            const isAddressQuery = rule => Array.isArray(rule?.query_type)
-                && rule.query_type.some(type => ['A', 'AAAA'].includes(String(type).toUpperCase()));
-            dns.rules = dns.rules.filter(rule => !(isAddressQuery(rule) && rule.server === fakeipTag));
-            dns.rules.push({ query_type: ['A', 'AAAA'], server: fakeipTag });
+        // FakeIP filter, the same set the Clash profile carries: local and router
+        // names must resolve for real, a fake address breaks LAN discovery.
+        const hasLocalFilter = dns.rules.some(rule => {
+            const suffixes = Array.isArray(rule?.domain_suffix) ? rule.domain_suffix : [rule?.domain_suffix];
+            return suffixes.some(suffix => String(suffix ?? '').includes('.lan'));
+        });
+        if (hasServer('dns_direct') && !hasLocalFilter) {
+            dns.rules.push({
+                domain_suffix: ['.lan', '.local', '.localdomain', '.home.arpa', 'msftconnecttest.com', 'msftncsi.com'],
+                server: 'dns_direct'
+            });
         }
 
+        // The tail decides what a name no rule set claimed resolves to, so it is
+        // rebuilt instead of patched: a stored base config must not keep the old
+        // geolocation-!cn-scoped fakeip rule, CN domains have to be matched before
+        // the fake address rules, and AAAA must stay unfaked - a fake IPv6 address
+        // can only be ULA, which browsers treat as local network access and gate
+        // behind a permission prompt.
+        const isAddressQuery = rule => {
+            const types = Array.isArray(rule?.query_type) ? rule.query_type : [rule?.query_type];
+            return types.some(type => type != null && ['A', 'AAAA'].includes(String(type).toUpperCase()));
+        };
         const availableTags = new Set(siteRuleSets.map(ruleSet => ruleSet?.tag).filter(Boolean));
         const cnTags = ['geolocation-cn', 'cn'].filter(tag => availableTags.has(tag));
+        // the legacy tier spells the fakeip server as address: "fakeip"
+        const fakeipTag = dns.servers.find(server => server?.type === 'fakeip'
+            || String(server?.address ?? '').startsWith('fakeip'))?.tag;
 
-        if (cnTags.length === 0 || !hasServer('dns_direct')) {
-            return;
+        dns.rules = dns.rules.filter(rule => {
+            if (rule?.server === fakeipTag && isAddressQuery(rule)) return false;
+            if (isAddressQuery(rule) && rule?.action === 'predefined') return false;
+            if (Array.isArray(rule?.rule_set) && rule.rule_set.some(tag => cnTags.includes(tag))) return false;
+            return true;
+        });
+
+        if (cnTags.length > 0 && hasServer('dns_direct')) {
+            // domestic names keep real addresses, otherwise fakeip would drag them
+            // through the tunnel
+            dns.rules.push({ rule_set: cnTags, server: 'dns_direct' });
         }
-        const alreadyRouted = dns.rules.some(rule => Array.isArray(rule?.rule_set) && rule.rule_set.some(tag => cnTags.includes(tag)));
-        if (alreadyRouted) {
-            return;
+        if (fakeipTag) {
+            if (this.singboxVersion !== LEGACY_CONFIG_TIER) {
+                // the predefined action only exists from 1.12
+                dns.rules.push({ query_type: ['AAAA'], action: 'predefined', rcode: 'NOERROR' });
+            }
+            dns.rules.push({ query_type: ['A'], server: fakeipTag });
         }
-        // Inserted right before the fakeip catch-all, matching the reference
-        // template: a domain in the CN lists must keep real addresses, otherwise
-        // fakeip would drag domestic sites through the tunnel.
-        const fakeipIndex = fakeipTag ? dns.rules.findIndex(rule => rule?.server === fakeipTag) : -1;
-        dns.rules.splice(fakeipIndex === -1 ? dns.rules.length : fakeipIndex, 0, { rule_set: cnTags, server: 'dns_direct' });
     }
 
     applyDeprecationMigrations() {
