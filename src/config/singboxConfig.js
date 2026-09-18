@@ -35,10 +35,14 @@ export const SING_BOX_CONFIG = {
 				}
 			},
 			{
+				// IPv4 only on purpose. A fake IPv6 address can only live in the
+				// ULA range (fc00::/7), which browsers classify as a local-network
+				// address and gate behind the "access devices on your local
+				// network" permission - that popup fires on every site. Mihomo does
+				// not fake AAAA by default either.
 				type: "fakeip",
 				tag: "dns_fakeip",
-				inet4_range: "198.18.0.0/15",
-				inet6_range: "fc00::/18"
+				inet4_range: "198.18.0.0/15"
 			}
 		],
 		rules: [
@@ -65,16 +69,38 @@ export const SING_BOX_CONFIG = {
 				rcode: "NOERROR"
 			},
 			{
-				// Catch-all fakeip, as in the reference template: every address
-				// query the CN rule sets did not claim is answered with a fake IP.
-				// A domain no rule set knows about (own CDN hostnames, IP check
-				// sites) then still resolves instantly and never depends on a real
-				// lookup through the proxy - an unreachable proxy-side resolver is
-				// what silently makes exactly those sites unreachable. The builder
-				// inserts the CN rule right before this one.
+				// FakeIP filter, same set as the Clash profile: local and router
+				// names have to resolve for real, a fake address breaks LAN
+				// discovery. The builder inserts the CN rule and the address rules
+				// after this one.
+				domain_suffix: [
+					".lan",
+					".local",
+					".localdomain",
+					".home.arpa",
+					"msftconnecttest.com",
+					"msftncsi.com"
+				],
+				server: "dns_direct"
+			},
+			{
+				// No fake IPv6 (see the fakeip server above) and no real IPv6 for
+				// proxied names either, so the browser never leaves the IPv4 path.
+				// Only names the CN rule sets did not claim reach this rule.
 				query_type: [
-					"A",
 					"AAAA"
+				],
+				action: "predefined",
+				rcode: "NOERROR"
+			},
+			{
+				// Catch-all fakeip for A, as in the reference template: a domain no
+				// rule set knows about (own CDN hostnames, IP check sites) still
+				// resolves instantly and never depends on a real lookup through the
+				// proxy - an unreachable proxy-side resolver is what silently makes
+				// exactly those sites unreachable.
+				query_type: [
+					"A"
 				],
 				server: "dns_fakeip"
 			}
@@ -131,8 +157,11 @@ export const SING_BOX_CONFIG_V1_11 = {
 	dns: {
 		servers: [
 			{
+				// addressed by name so the TLS handshake gets the certificate the
+				// endpoint actually serves; 1.1.1.1 does not match it
 				tag: "dns_proxy",
-				address: "tls://1.1.1.1",
+				address: "tls://cloudflare-dns.com",
+				address_resolver: "dns_resolver",
 				detour: "🚀 节点选择"
 			},
 			{
@@ -178,8 +207,9 @@ export const SING_BOX_CONFIG_V1_11 = {
 		independent_cache: true,
 		fakeip: {
 			enabled: true,
-			inet4_range: "198.18.0.0/15",
-			inet6_range: "fc00::/18"
+			// no inet6_range: a fake ULA address trips the browser's local-network
+			// permission prompt, see the current config
+			inet4_range: "198.18.0.0/15"
 		}
 	},
 	ntp: {
