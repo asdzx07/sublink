@@ -115,10 +115,15 @@ export function createApp(bindings = {}) {
             );
             await builder.build();
             const userinfo = builder.getSubscriptionUserinfo();
+            const headers = { 'Content-Type': 'application/json; charset=utf-8' };
             if (userinfo) {
-                c.header('subscription-userinfo', userinfo);
+                headers['subscription-userinfo'] = userinfo;
             }
-            return c.json(builder.config);
+            // Pretty printed on purpose: clients store the body verbatim, so a
+            // minified profile comes back as one unreadable line. Indented JSON
+            // parses the same, stays hand-editable, and is still compressed on
+            // the wire.
+            return c.body(JSON.stringify(builder.config, null, 2), 200, headers);
         } catch (error) {
             return handleError(c, error, runtime.logger);
         }
