@@ -36,6 +36,19 @@ describe('Worker', () => {
         expect(json).toHaveProperty('outbounds');
     });
 
+    it('GET /singbox pretty prints the profile so it stays hand-editable', async () => {
+        const app = createTestApp();
+        const config = 'vmess://ew0KICAidiI6ICIyIiwNCiAgInBzIjogInRlc3QiLA0KICAiYWRkIjogIjEuMS4xLjEiLA0KICAicG9ydCI6ICI0NDMiLA0KICAiaWQiOiAiYWRkNjY2NjYtODg4OC04ODg4LTg4ODgtODg4ODg4ODg4ODg4IiwNCiAgImFpZCI6ICIwIiwNCiAgInNjeSI6ICJhdXRvIiwNCiAgIm5ldCI6ICJ3cyIsDQogICJ0eXBlIjogIm5vbmUiLA0KICAiaG9zdCI6ICIiLA0KICAicGF0aCI6ICIvIiwNCiAgInRscyI6ICJ0bHMiDQp9';
+        const res = await app.request(`http://localhost/singbox?config=${encodeURIComponent(config)}`);
+        const text = await res.text();
+
+        // clients store the body verbatim, so it must not be one long line
+        expect(text).toContain('\n  "dns"');
+        expect(text.split('\n').length).toBeGreaterThan(50);
+        // indented JSON has to keep parsing the same
+        expect(() => JSON.parse(text)).not.toThrow();
+    });
+
     it('GET /singbox ignores a Clash base config ID', async () => {
         const kv = new MemoryKVAdapter();
         await kv.put('clash_test', JSON.stringify({
