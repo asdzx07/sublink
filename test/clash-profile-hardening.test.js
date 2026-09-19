@@ -46,6 +46,15 @@ describe('proxy group icons', () => {
         expect(groupByName(config, '🎬 流媒体').icon).toBe(`${PROXY_GROUP_ICON_BASE}Streaming.png`);
     });
 
+    it('labels the rule groups the selected preset generates', async () => {
+        // these come from the built-in rules, not from customRules
+        const config = await build();
+
+        expect(groupByName(config, '🏠 私有网络').icon).toBe(`${PROXY_GROUP_ICON_BASE}Direct.png`);
+        expect(groupByName(config, '🔒 国内服务').icon).toBe(`${PROXY_GROUP_ICON_BASE}CN.png`);
+        expect(groupByName(config, '🌐 非中国').icon).toBe(`${PROXY_GROUP_ICON_BASE}Global.png`);
+    });
+
     it('labels country and manual groups', async () => {
         const config = await build({ groupByCountry: true, proxies: ['香港 01', 'Node-A'] });
 

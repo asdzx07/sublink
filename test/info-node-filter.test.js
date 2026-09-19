@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import yaml from 'js-yaml';
 import { ClashConfigBuilder } from '../src/builders/ClashConfigBuilder.js';
 import { SingboxConfigBuilder } from '../src/builders/SingboxConfigBuilder.js';
-import { isInfoNodeName, INFO_NODE_PATTERN } from '../src/utils.js';
+import { isInfoNodeName, getShareLinkName, INFO_NODE_PATTERN, encodeBase64, decodeBase64 } from '../src/utils.js';
+import { createApp } from '../src/app/createApp.jsx';
+import { MemoryKVAdapter } from '../src/adapters/kv/memoryKv.js';
 
 /**
  * Subscriptions pad their node list with advertisement rows ("剩余流量：12.5GB",
@@ -44,6 +46,15 @@ describe('advertisement rows are not nodes', () => {
             .forEach(name => expect(isInfoNodeName(name), name).toBe(false));
     });
 
+    it('reads the name out of a share link', () => {
+        expect(getShareLinkName('ss://abc@a.example.com:443#NodeA')).toBe('NodeA');
+        expect(getShareLinkName(`ss://abc#${encodeURIComponent('剩余流量：12GB')}`)).toBe('剩余流量：12GB');
+        expect(getShareLinkName(`vmess://${encodeBase64(JSON.stringify({ ps: 'Traffic: 1GB' }))}`)).toBe('Traffic: 1GB');
+        // a line we cannot read must never be dropped
+        expect(getShareLinkName('ss://abc@a.example.com:443')).toBeUndefined();
+        expect(getShareLinkName('not a link')).toBeUndefined();
+    });
+
     it('drops them from the clash node list', async () => {
         const names = (await buildClash()).proxies.map(proxy => proxy.name);
 
@@ -78,5 +89,26 @@ describe('advertisement rows are not nodes', () => {
         } finally {
             vi.unstubAllGlobals();
         }
+    });
+
+    it('drops them from the xray passthrough as well', async () => {
+        const app = createApp({
+            kv: new MemoryKVAdapter(),
+            assetFetcher: null,
+            logger: console,
+            config: { configTtlSeconds: 60, shortLinkTtlSeconds: null }
+        });
+        const payload = [
+            'ss://YWVzLTEyOC1nY206cGFzcw@a.example.com:443#NodeA',
+            `ss://YWVzLTEyOC1nY206cGFzcw@b.example.com:443#${encodeURIComponent('剩余流量：12.5GB')}`,
+            // vmess hides its name inside the base64 payload instead of the fragment
+            `vmess://${encodeBase64(JSON.stringify({ ps: '套餐到期', add: 'c.example.com', port: 443, id: 'x' }))}`
+        ];
+
+        const res = await app.request(`http://localhost/xray?config=${encodeURIComponent(payload.join('\n'))}`);
+        const kept = decodeBase64(await res.text()).split('\n');
+
+        expect(kept).toHaveLength(1);
+        expect(kept[0]).toContain('NodeA');
     });
 });
