@@ -10,7 +10,7 @@ import { SingboxConfigBuilder } from '../builders/SingboxConfigBuilder.js';
 import { ClashConfigBuilder } from '../builders/ClashConfigBuilder.js';
 import { SurgeConfigBuilder } from '../builders/SurgeConfigBuilder.js';
 import { createTranslator, resolveLanguage } from '../i18n/index.js';
-import { encodeBase64, tryDecodeSubscriptionLines } from '../utils.js';
+import { encodeBase64, tryDecodeSubscriptionLines, getShareLinkName, isInfoNodeName } from '../utils.js';
 import { APP_NAME, APP_SUBTITLE } from '../constants.js';
 import { ShortLinkService } from '../services/shortLinkService.js';
 import { ConfigStorageService } from '../services/configStorageService.js';
@@ -302,7 +302,11 @@ export function createApp(bindings = {}) {
             }
         }
 
-        const finalString = finalProxyList.join('\n');
+        const finalString = finalProxyList
+            // advertisement rows have to go here too: this output is a node list as
+            // well, and an entry that can never connect only breaks the client
+            .filter(line => !isInfoNodeName(getShareLinkName(line)))
+            .join('\n');
         if (!finalString) {
             return c.text('Missing config parameter', 400);
         }
