@@ -109,6 +109,10 @@ export const CLASH_CONFIG = {
 	'dns': {
 		'enable': true,
 		'ipv6': true,
+		// ARC keeps the handful of hot names while still evicting one-off lookups,
+		// which plain LRU handles badly once the cache fills up. Purely a local
+		// cache policy: it changes neither the resolver nor what is queried.
+		'cache-algorithm': 'arc',
 		'respect-rules': true,
 		'enhanced-mode': 'fake-ip',
 		'fake-ip-filter': [

@@ -41,3 +41,11 @@ export { generateSubconverterConfig } from './subconverterConfig.js';
 export { SING_BOX_CONFIG, SING_BOX_CONFIG_V1_11 } from './singboxConfig.js';
 export { CLASH_CONFIG } from './clashConfig.js';
 export { SURGE_CONFIG } from './surgeConfig.js';
+
+// Clash proxy group icons
+export {
+	PROXY_GROUP_ICON_BASE,
+	SYSTEM_GROUP_ICONS,
+	RULE_GROUP_ICONS,
+	COUNTRY_GROUP_ICONS
+} from './proxyGroupIcons.js';
