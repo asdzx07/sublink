@@ -37,6 +37,18 @@ describe('mihomo tun stack', () => {
         // otherwise the OS is free to answer from the physical adapter's resolver
         expect(config.tun['strict-route']).toBe(true);
     });
+
+    it('never hands out a fake ipv6 address', async () => {
+        const config = await buildConfig();
+
+        // mihomo can only fake IPv6 inside a ULA range (fc00::/7), which browsers
+        // treat as local-network access - that is the popup the sing-box profile
+        // had to switch off, so the Clash profile must not enable a v6 pool
+        expect(config.dns['enhanced-mode']).toBe('fake-ip');
+        expect(config.dns).not.toHaveProperty('fake-ip-range6');
+        expect(config.tun['auto-route']).toBe(true);
+        expect(config.tun['strict-route']).toBe(true);
+    });
 });
 
 describe('mihomo dns leak prevention', () => {
@@ -56,13 +68,13 @@ describe('mihomo dns leak prevention', () => {
 
     it('resolves non-china domains through encrypted resolvers that respect the rules', async () => {
         const config = await buildConfig();
+        const foreign = config.dns['nameserver-policy']['geosite:geolocation-!cn'];
 
         expect(config.dns['respect-rules']).toBe(true);
         expect(config.dns['enhanced-mode']).toBe('fake-ip');
-        expect(config.dns['nameserver-policy']['geosite:geolocation-!cn']).toEqual([
-            'https://1.1.1.1/dns-query',
-            'https://8.8.8.8/dns-query'
-        ]);
+        foreign.forEach(server => {
+            expect(server).toMatch(/^https:\/\/(?:1\.1\.1\.1|8\.8\.8\.8)\/dns-query/);
+        });
     });
 
     it('keeps local and private hostnames out of the fake-ip pool', async () => {
@@ -70,5 +82,59 @@ describe('mihomo dns leak prevention', () => {
 
         expect(config.dns['fake-ip-filter']).toContain('*.lan');
         expect(config.dns['fake-ip-filter']).toContain('*.local');
+    });
+});
+
+describe('mihomo profile hardening', () => {
+    it('sniffs only to classify, never to rewrite the destination', async () => {
+        const config = await buildConfig();
+
+        // a pure-IP connection carries no domain, so without sniffing it can only
+        // be matched by the ip rules
+        expect(config.sniffer).toMatchObject({
+            enable: true,
+            'override-destination': false,
+            'parse-pure-ip': true
+        });
+        // rewriting the destination from a sniffed name is what lets domain
+        // fronting dodge the route rules
+        expect(config.sniffer.sniff.TLS.ports).toContain(443);
+        expect(config.sniffer.sniff.QUIC.ports).toContain(443);
+        expect(config.sniffer['skip-domain']).toContain('+.push.apple.com');
+    });
+
+    it('drops svcb/ech answers at every resolver', async () => {
+        const config = await buildConfig();
+        const servers = [
+            ...config.dns.nameserver,
+            ...config.dns['proxy-server-nameserver'],
+            ...Object.values(config.dns['nameserver-policy']).flat()
+        ];
+
+        // a real ipv4hint/ECH config would let the browser bypass the fake mapping
+        // and fail the handshake on the proxy path; dropping it also saves a query
+        servers.forEach(server => {
+            expect(server, server).toContain('disable-qtype-65=true');
+            expect(server, server).toContain('disable-qtype-64=true');
+        });
+    });
+
+    it('keeps the selected node and the fake-ip mappings across restarts', async () => {
+        const config = await buildConfig();
+
+        expect(config.profile).toEqual({ 'store-selected': true, 'store-fake-ip': true });
+    });
+
+    it('compares node delays uniformly and races resolved addresses', async () => {
+        const config = await buildConfig();
+
+        expect(config['unified-delay']).toBe(true);
+        expect(config['tcp-concurrent']).toBe(true);
+    });
+
+    it('keeps the system clock in sync', async () => {
+        const config = await buildConfig();
+
+        expect(config.ntp).toMatchObject({ enable: true, server: 'time.apple.com', port: 123 });
     });
 });
