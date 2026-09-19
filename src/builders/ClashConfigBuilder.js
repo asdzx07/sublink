@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES } from '../config/index.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES, PROXY_GROUP_ICON_BASE, SYSTEM_GROUP_ICONS, RULE_GROUP_ICONS, COUNTRY_GROUP_ICONS } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
-import { deepCopy, groupProxiesByCountry, buildCountryNameFilter, INFO_NODE_PATTERN } from '../utils.js';
+import { deepCopy, groupProxiesByCountry, buildCountryNameFilter, INFO_NODE_PATTERN, COUNTRY_DATA } from '../utils.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
 import { buildSelectorMembers, buildNodeSelectMembers, buildCustomRuleMembers, uniqueNames } from './helpers/groupBuilder.js';
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
@@ -630,6 +630,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 if (userGroup.url) existing.url = userGroup.url;
                 if (typeof userGroup.interval === 'number') existing.interval = userGroup.interval;
                 if (typeof userGroup.lazy === 'boolean') existing.lazy = userGroup.lazy;
+                // …and the icon, so a base config can override the generated one
+                if (userGroup.icon) existing.icon = userGroup.icon;
             } else {
                 // New user-defined group - validate and add
                 const newGroup = { ...userGroup };
@@ -676,6 +678,44 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    /**
+     * Attach an icon to every generated group.
+     *
+     * The client downloads the image itself, so a missing file can only cost the
+     * icon - it cannot break the profile. An icon already present in the user's
+     * base config is kept, and groups without a mapping are left untouched.
+     */
+    applyGroupIcons() {
+        const groups = this.config['proxy-groups'];
+        if (!Array.isArray(groups)) {
+            return;
+        }
+
+        const iconNameFor = group => {
+            if (!group?.name || group.icon) {
+                return undefined;
+            }
+            // display names are translated, so match on the i18n key instead
+            const systemKey = Object.keys(SYSTEM_GROUP_ICONS).find(key => this.t(key) === group.name);
+            if (systemKey) {
+                return SYSTEM_GROUP_ICONS[systemKey];
+            }
+            const rule = (this.customRules || []).find(item => item?.name && this.t(`outboundNames.${item.name}`) === group.name);
+            if (rule) {
+                return RULE_GROUP_ICONS[rule.name];
+            }
+            const country = Object.entries(COUNTRY_DATA).find(([, data]) => `${data.emoji} ${data.name}` === group.name);
+            return country ? COUNTRY_GROUP_ICONS[country[0]] : undefined;
+        };
+
+        groups.forEach(group => {
+            const icon = iconNameFor(group);
+            if (icon) {
+                group.icon = `${PROXY_GROUP_ICON_BASE}${icon}`;
+            }
+        });
+    }
+
     // 生成规则
     generateRules() {
         return generateRules(this.selectedRules, this.customRules);
@@ -701,6 +741,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         sanitizeClashProxyGroups(this.config);
         this.validateProxyGroups();
+        // last step for the groups: sanitize rewrites them, and an icon the user
+        // put in their base config must win over the generated one
+        this.applyGroupIcons();
 
         this.config.rules = [
             ...ruleResults,
