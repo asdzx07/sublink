@@ -227,6 +227,19 @@ export function createStableProviderName(url) {
 	return `_auto_provider_${(hash >>> 0).toString(36)}`;
 }
 
+// Provider subscriptions usually pad their list with advertisement rows that look
+// like nodes ("剩余流量：12GB", "官网", "套餐到期时间"). They are not proxies: a group
+// that offers them can never fall back off one, and a latency test that measures
+// one keeps reporting a failure. Matched against the node name, and reused verbatim
+// as the Clash provider `exclude-filter`, which is a regex over the name too.
+export const INFO_NODE_PATTERN = '官网|剩余|流量|套餐|订阅|到期|过期|续费|重置|试用|客服|Expire|Traffic';
+
+const INFO_NODE_REGEX = new RegExp(INFO_NODE_PATTERN);
+
+export function isInfoNodeName(name) {
+	return typeof name === 'string' && INFO_NODE_REGEX.test(name);
+}
+
 export function deepCopy(obj) {
 	if (obj === null || typeof obj !== 'object') {
 		return obj;
