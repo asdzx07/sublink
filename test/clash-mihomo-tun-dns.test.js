@@ -82,6 +82,8 @@ describe('mihomo dns leak prevention', () => {
 
         expect(config.dns['fake-ip-filter']).toContain('*.lan');
         expect(config.dns['fake-ip-filter']).toContain('*.local');
+        // the sing-box profile filters the RFC 8375 home network too
+        expect(config.dns['fake-ip-filter']).toContain('+.home.arpa');
     });
 });
 
@@ -128,13 +130,11 @@ describe('mihomo profile hardening', () => {
     it('compares node delays uniformly and races resolved addresses', async () => {
         const config = await buildConfig();
 
+        // must travel with the profile: clients without the switch would otherwise
+        // report a latency that includes the handshake
         expect(config['unified-delay']).toBe(true);
         expect(config['tcp-concurrent']).toBe(true);
-    });
-
-    it('keeps the system clock in sync', async () => {
-        const config = await buildConfig();
-
-        expect(config.ntp).toMatchObject({ enable: true, server: 'time.apple.com', port: 123 });
+        // the platform already keeps its own clock (w32time / systemd-timesyncd)
+        expect(config).not.toHaveProperty('ntp');
     });
 });
