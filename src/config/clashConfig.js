@@ -16,11 +16,8 @@ export const CLASH_CONFIG = {
 	'allow-lan': false,
 	'mode': 'rule',
 	'log-level': 'info',
-	// Latency is then measured the same way for every node (comparable numbers),
-	// and a connection races the resolved addresses instead of trying them one by
-	// one. Only addresses of the same domain are raced, so nothing extra is
-	// disclosed.
-	'unified-delay': true,
+	// A connection races the resolved addresses instead of trying them one by one.
+	// Only addresses of the same domain are raced, so nothing extra is disclosed.
 	'tcp-concurrent': true,
 	'geodata-mode': true,
 	'geo-auto-update': true,
@@ -47,17 +44,6 @@ export const CLASH_CONFIG = {
 	},
 	'rule-providers': {
 		// 将由代码自动生成
-	},
-	// TLS validation and every handshake depend on the system clock. The tun
-	// already runs with the privileges writing it needs. Nothing here resolves a
-	// name and the packets are routed by the rules like any other traffic, so this
-	// adds no DNS query and no leak path.
-	'ntp': {
-		'enable': true,
-		'server': 'time.apple.com',
-		'port': 123,
-		'write-to-system': true,
-		'interval': 30
 	},
 	// A manually selected node and the fake-ip mappings survive a restart, so the
 	// first request afterwards does not have to re-resolve from scratch. Both are
@@ -119,6 +105,8 @@ export const CLASH_CONFIG = {
 			'*.lan',
 			'*.local',
 			'*.localdomain',
+			// RFC 8375 home network; the sing-box profile filters it as well
+			'+.home.arpa',
 			'+.msftconnecttest.com',
 			'+.msftncsi.com'
 		],
