@@ -1,5 +1,5 @@
 import { ProxyParser } from '../parsers/index.js';
-import { createStableProviderName, deepCopy, tryDecodeSubscriptionLines, decodeBase64 } from '../utils.js';
+import { createStableProviderName, deepCopy, tryDecodeSubscriptionLines, decodeBase64, isInfoNodeName } from '../utils.js';
 import { createTranslator } from '../i18n/index.js';
 import { generateRules, getOutbounds, PREDEFINED_RULE_SETS } from '../config/index.js';
 
@@ -381,7 +381,9 @@ export class BaseConfigBuilder {
     }
 
     addCustomItems(customItems) {
-        const validItems = customItems.filter(item => item != null);
+        // advertisement rows from the subscription are not nodes: they can never
+        // connect, and a latency group that measures one keeps reporting a failure
+        const validItems = customItems.filter(item => item != null && !isInfoNodeName(item?.tag));
         validItems.forEach(item => {
             if (item?.tag) {
                 const convertedProxy = this.convertProxy(item);

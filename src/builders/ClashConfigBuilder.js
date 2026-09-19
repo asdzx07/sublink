@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
-import { deepCopy, groupProxiesByCountry, buildCountryNameFilter } from '../utils.js';
+import { deepCopy, groupProxiesByCountry, buildCountryNameFilter, INFO_NODE_PATTERN } from '../utils.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
 import { buildSelectorMembers, buildNodeSelectMembers, buildCustomRuleMembers, uniqueNames } from './helpers/groupBuilder.js';
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
@@ -84,6 +84,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 url: url,
                 path: `./proxy_providers/${name}.yaml`,
                 interval: 3600,
+                // remote providers pad their list with advertisement rows; they are
+                // not nodes and only pollute the groups (same list as the parser)
+                'exclude-filter': INFO_NODE_PATTERN,
                 'health-check': {
                     enable: true,
                     url: 'https://www.gstatic.com/generate_204',
