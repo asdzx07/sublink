@@ -700,6 +700,11 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      * reports. Unmatched lookups go to the encrypted proxy-side resolver, while
      * CN domains are matched explicitly against the generated `cn` rule sets so
      * the common case keeps the local fast path.
+     *
+     * This method owns the whole rule tail, which is why the base config carries
+     * only the two clash_mode rules: a default build and a user-supplied base
+     * config therefore take the same path, and rules a stored base config pinned
+     * to the old behaviour are recognised and dropped below.
      */
     configureDnsRouting(siteRuleSets = []) {
         const dns = this.config?.dns;
@@ -806,6 +811,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                 // the predefined action only exists from 1.12
                 dns.rules.push({ query_type: ['AAAA'], action: 'predefined', rcode: 'NOERROR' });
             }
+            // Catch-all fakeip for A: a domain no rule set knows about (own CDN
+            // hostnames, IP check sites) then resolves instantly instead of waiting
+            // for a real lookup through the proxy - an unreachable proxy-side
+            // resolver is what silently made exactly those sites unreachable.
             dns.rules.push({ query_type: ['A'], server: fakeipTag });
         }
     }
