@@ -45,6 +45,12 @@ export const SING_BOX_CONFIG = {
 				inet4_range: "198.18.0.0/15"
 			}
 		],
+		// Only the two mode rules live here. The rest of the chain - the SVCB/ECH
+		// guard, the local name filter, the CN split and the fake address rules - is
+		// built by SingboxConfigBuilder.configureDnsRouting, which is also what
+		// protects a user-supplied base config. Keeping a second copy here meant two
+		// places to update and no way to tell which one had won; the default build and
+		// a custom base config now take exactly the same path.
 		rules: [
 			{
 				clash_mode: "direct",
@@ -53,56 +59,6 @@ export const SING_BOX_CONFIG = {
 			{
 				clash_mode: "global",
 				server: "dns_proxy"
-			},
-			{
-				// SVCB/HTTPS answers carry real ipv4hint/ipv6hint plus an ECH config.
-				// Handing those to the browser while fakeip is in use makes it skip
-				// the fake mapping, dial the real hints and attempt ECH through the
-				// proxy - which is how Cloudflare-hosted sites end up unreachable.
-				// Answer "success, no records" (NODATA) so clients fall back to the
-				// A/AAAA answers instead. Not REFUSED: that makes resolvers retry.
-				query_type: [
-					"HTTPS",
-					"SVCB"
-				],
-				action: "predefined",
-				rcode: "NOERROR"
-			},
-			{
-				// FakeIP filter, same set as the Clash profile: local and router
-				// names have to resolve for real, a fake address breaks LAN
-				// discovery. The builder inserts the CN rule and the address rules
-				// after this one.
-				domain_suffix: [
-					".lan",
-					".local",
-					".localdomain",
-					".home.arpa",
-					"msftconnecttest.com",
-					"msftncsi.com"
-				],
-				server: "dns_direct"
-			},
-			{
-				// No fake IPv6 (see the fakeip server above) and no real IPv6 for
-				// proxied names either, so the browser never leaves the IPv4 path.
-				// Only names the CN rule sets did not claim reach this rule.
-				query_type: [
-					"AAAA"
-				],
-				action: "predefined",
-				rcode: "NOERROR"
-			},
-			{
-				// Catch-all fakeip for A, as in the reference template: a domain no
-				// rule set knows about (own CDN hostnames, IP check sites) still
-				// resolves instantly and never depends on a real lookup through the
-				// proxy - an unreachable proxy-side resolver is what silently makes
-				// exactly those sites unreachable.
-				query_type: [
-					"A"
-				],
-				server: "dns_fakeip"
 			}
 		],
 		// Only query types fakeip cannot answer land here, so keep them on the
