@@ -16,6 +16,11 @@ export const CLASH_CONFIG = {
 	'allow-lan': false,
 	'mode': 'rule',
 	'log-level': 'info',
+	// Every node is then measured the same way, and the number matches what the
+	// client's own test shows. Kept in the profile because some clients expose no
+	// such switch: without it the reported latency still includes the handshake and
+	// reads higher. Measurement only - routing and resolution are untouched.
+	'unified-delay': true,
 	// A connection races the resolved addresses instead of trying them one by one.
 	// Only addresses of the same domain are raced, so nothing extra is disclosed.
 	'tcp-concurrent': true,
