@@ -240,6 +240,42 @@ export function isInfoNodeName(name) {
 	return typeof name === 'string' && INFO_NODE_REGEX.test(name);
 }
 
+/**
+ * Read the display name of a share link - used by the Xray passthrough, where no
+ * parser has run and the original text is all we have. Most protocols put the
+ * name in the fragment, vmess keeps it in its base64 payload instead. Anything
+ * that cannot be understood returns undefined, so such a line is never dropped.
+ */
+export function getShareLinkName(line) {
+	const text = typeof line === 'string' ? line.trim() : '';
+	if (!text) {
+		return undefined;
+	}
+
+	const hashIndex = text.indexOf('#');
+	if (hashIndex !== -1) {
+		const fragment = text.slice(hashIndex + 1).trim();
+		if (fragment) {
+			try {
+				return decodeURIComponent(fragment);
+			} catch {
+				return fragment;
+			}
+		}
+	}
+
+	if (text.toLowerCase().startsWith('vmess://')) {
+		try {
+			const name = JSON.parse(decodeBase64(text.slice('vmess://'.length).trim()))?.ps;
+			return typeof name === 'string' ? name : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+
+	return undefined;
+}
+
 export function deepCopy(obj) {
 	if (obj === null || typeof obj !== 'object') {
 		return obj;
