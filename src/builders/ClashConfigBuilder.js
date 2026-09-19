@@ -700,9 +700,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             if (systemKey) {
                 return SYSTEM_GROUP_ICONS[systemKey];
             }
-            const rule = (this.customRules || []).find(item => item?.name && this.t(`outboundNames.${item.name}`) === group.name);
-            if (rule) {
-                return RULE_GROUP_ICONS[rule.name];
+            // rule groups (Private, Location:CN, Non-China, …) are named after their
+            // rule, so the same i18n lookup finds them; a custom rule whose name is
+            // not in the table simply gets no icon
+            const ruleName = Object.keys(RULE_GROUP_ICONS).find(name => this.t(`outboundNames.${name}`) === group.name);
+            if (ruleName) {
+                return RULE_GROUP_ICONS[ruleName];
             }
             const country = Object.entries(COUNTRY_DATA).find(([, data]) => `${data.emoji} ${data.name}` === group.name);
             return country ? COUNTRY_GROUP_ICONS[country[0]] : undefined;
