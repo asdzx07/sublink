@@ -13,7 +13,7 @@ export function uniqueNames(names = []) {
     return result;
 }
 
-export function withDirectReject(options = [], { includeReject = true } = {}) {
+function withDirectReject(options = [], { includeReject = true } = {}) {
     return uniqueNames([
         ...options,
         'DIRECT',

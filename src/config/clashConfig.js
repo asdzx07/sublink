@@ -43,6 +43,10 @@ export const CLASH_CONFIG = {
 		// Kept in the profile instead of relying on a client toggle: without it
 		// the OS may still resolve through the physical adapter's DNS.
 		'strict-route': true,
+		// Sends :53 to mihomo's own DNS module instead of letting it travel as
+		// ordinary traffic, which is what makes fake-ip apply to system lookups.
+		// Verge moves it into its own tun settings and logs a notice about that,
+		// which is harmless - the app applies an equivalent value.
 		'dns-hijack': [
 			'any:53'
 		]

@@ -3,8 +3,6 @@
  * Contains unified rule structure and predefined rule sets
  */
 
-export const CUSTOM_RULES = [];
-
 export const UNIFIED_RULES = [
 	{
 		name: 'Ad Block',

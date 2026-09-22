@@ -28,6 +28,9 @@ describe('mihomo tun stack', () => {
         const config = await buildConfig();
 
         expect(config.tun).toMatchObject({ enable: true, stack: 'mips', 'auto-route': true });
+        // :53 has to reach mihomo's own DNS module, otherwise fake-ip never applies
+        // to system lookups; Verge moves the field into its settings and only logs a
+        // notice about it, which is harmless
         expect(config.tun['dns-hijack']).toEqual(['any:53']);
     });
 

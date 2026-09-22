@@ -2,7 +2,7 @@ import { APP_NAME } from '../constants.js';
 import { checkStartsWith } from "../utils.js";
 
 // 定义语言包
-export const translations = {
+const translations = {
   'zh-CN': {
     enableClashUI: '启用 Clash API',
     enableClashUITip: '在 SingBox 配置中启用 Clash API (支持 Dashboard 面板)，默认端口 9090',

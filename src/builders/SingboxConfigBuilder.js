@@ -46,20 +46,6 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         }
     }
 
-    /**
-     * Remote subscriptions are never turned into outbound providers.
-     *
-     * The core rejects a profile that carries them -
-     * `outbounds[0].providers: json: unknown field "providers"` - so a Sing-Box
-     * subscription URL is parsed and inlined as ordinary outbounds, exactly like
-     * every other format. The only thing lost is that refreshing the nodes means
-     * re-importing the converted subscription instead of letting the client
-     * re-download it, which is a fair price for a profile that actually loads.
-     */
-    isCompatibleProviderFormat() {
-        return false;
-    }
-
     getProxies() {
         return this.config.outbounds.filter(outbound => outbound?.server != undefined);
     }

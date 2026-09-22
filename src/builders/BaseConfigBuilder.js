@@ -183,6 +183,11 @@ export class BaseConfigBuilder {
     /**
      * Check if subscription format is compatible for use as a provider
      * Override in child classes to enable provider support
+     *
+     * Clash enables it; Sing-Box does not, because the core rejects a profile that
+     * carries the provider fields ("outbounds[0].providers: json: unknown field
+     * \"providers\""), so a remote subscription is parsed and inlined there instead.
+     *
      * @param {'clash'|'singbox'|'unknown'} format - Detected subscription format
      * @returns {boolean} - True if format can be used as provider
      */

@@ -16,28 +16,6 @@ export function normalizeGroupName(name) {
 }
 
 /**
- * Check if two group names are equivalent after normalization
- * @param {string} a - First group name
- * @param {string} b - Second group name
- * @returns {boolean} - True if names are equivalent
- */
-export function isSameGroupName(a, b) {
-    return normalizeGroupName(a) === normalizeGroupName(b);
-}
-
-/**
- * Find a group by name using normalized comparison
- * @param {Array} groups - Array of group objects
- * @param {string} name - Group name to find
- * @returns {object|undefined} - Found group or undefined
- */
-export function findGroupByName(groups, name) {
-    if (!Array.isArray(groups)) return undefined;
-    const normName = normalizeGroupName(name);
-    return groups.find(g => g && normalizeGroupName(g.name) === normName);
-}
-
-/**
  * Find index of a group by name using normalized comparison
  * @param {Array} groups - Array of group objects
  * @param {string} name - Group name to find
