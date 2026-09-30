@@ -26,6 +26,15 @@ const TUN_ADDRESS_MERGES = {
 };
 const MODERN_HTTP_CLIENT_TIER = '1.14';
 const LEGACY_CONFIG_TIER = '1.11';
+// Payment and banking apex domains. A stale optimistic-cache answer here can
+// fail a checkout or a bank login, so these queries opt out of the optimistic
+// cache. They resolve through the direct domestic resolver like other CN names,
+// which also keeps them off the fakeip catch-all when no CN rule-set is loaded.
+const FINANCE_NO_STALE_DOMAINS = [
+    'alipay.com', 'alipay.cn', 'tenpay.com', 'unionpay.com',
+    'icbc.com.cn', 'ccb.com', 'abcchina.com', 'bankofchina.com', 'boc.cn',
+    'cmbchina.com', 'psbc.com', 'bankcomm.com', 'spdb.com.cn', 'cgbchina.com.cn'
+];
 
 export class SingboxConfigBuilder extends BaseConfigBuilder {
     constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, enableClashUI = false, externalController, externalUiDownloadUrl, singboxVersion = '1.12', includeAutoSelect = true) {
@@ -679,6 +688,27 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                 domain_suffix: ['.lan', '.local', '.localdomain', '.home.arpa', 'msftconnecttest.com', 'msftncsi.com'],
                 server: 'dns_direct'
             });
+        }
+
+        // 1.14+: serve (possibly expired) cache immediately and refresh in the
+        // background - repeated lookups feel instant. Unknown on older tiers.
+        if (this.singboxVersion === MODERN_HTTP_CLIENT_TIER && dns.optimistic === undefined) {
+            dns.optimistic = true;
+        }
+
+        // Finance names bypass the optimistic cache (see FINANCE_NO_STALE_DOMAINS):
+        // a stale answer here fails payments, and they must never fall through
+        // to the fakeip catch-all when no CN rule-set is loaded.
+        if (this.singboxVersion === MODERN_HTTP_CLIENT_TIER && hasServer('dns_direct')) {
+            const hasFinanceRule = dns.rules.some(rule =>
+                Array.isArray(rule?.domain_suffix) && rule.domain_suffix.includes('alipay.com'));
+            if (!hasFinanceRule) {
+                dns.rules.push({
+                    domain_suffix: FINANCE_NO_STALE_DOMAINS,
+                    server: 'dns_direct',
+                    disable_optimistic_cache: true
+                });
+            }
         }
 
         // The tail decides what a name no rule set claimed resolves to, so it is
