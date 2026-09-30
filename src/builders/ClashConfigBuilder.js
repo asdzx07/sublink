@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES } from '../config/index.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES, REJECT_ACTION_RULES } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { deepCopy, groupProxiesByCountry, buildCountryNameFilter, INFO_NODE_PATTERN } from '../utils.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
@@ -424,6 +424,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     // For rules that should default to DIRECT, move DIRECT to the front
                     if (DIRECT_DEFAULT_RULES.has(outbound)) {
                         proxies = ['DIRECT', ...proxies.filter(p => p !== 'DIRECT')];
+                    }
+                    // Ad-block rules must actually block by default: REJECT leads
+                    // the group (a select group defaults to its first member),
+                    // DIRECT stays as an escape hatch for rule-set false positives.
+                    if (REJECT_ACTION_RULES.has(outbound)) {
+                        proxies = ['REJECT', 'DIRECT', ...proxies.filter(p => p !== 'REJECT' && p !== 'DIRECT')];
                     }
                     const group = {
                         type: "select",
