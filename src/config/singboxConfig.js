@@ -64,7 +64,10 @@ export const SING_BOX_CONFIG = {
 		// Only query types fakeip cannot answer land here, so keep them on the
 		// encrypted proxy-side resolver instead of a public resolver reached
 		// outside the tunnel.
-		final: "dns_proxy"
+		final: "dns_proxy",
+		// Same default as the 1.11 tier: skip the AAAA race on dual-stack hosts.
+		// AAAA is answered NOERROR by the guard rule anyway, so nothing is lost.
+		strategy: "prefer_ipv4"
 	},
 	ntp: {
 		enabled: true,
