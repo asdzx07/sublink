@@ -40,6 +40,21 @@ function supportsMrsFormat(userAgent) {
     return true;
 }
 
+/**
+ * Build reality-opts for Clash/Mihomo proxies.
+ * Enables X25519MLKEM768 hybrid key exchange (post-quantum) for REALITY handshakes.
+ * @param {object} tls - proxy TLS config
+ * @returns {object|undefined} reality-opts object, or undefined if REALITY not enabled
+ */
+function buildRealityOpts(tls) {
+    if (!tls?.reality?.enabled) return undefined;
+    return {
+        'public-key': tls.reality.public_key,
+        'short-id': tls.reality.short_id,
+        'support-x25519mlkem768': true,
+    };
+}
+
 function getClashUdpValue(proxy, defaultEnabled = true) {
     if (typeof proxy?.udp !== 'undefined') {
         return proxy.udp;
@@ -227,10 +242,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     servername: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
                     ...this.buildTransportFields(proxy.transport),
-                    'reality-opts': proxy.tls?.reality?.enabled ? {
-                        'public-key': proxy.tls.reality.public_key,
-                        'short-id': proxy.tls.reality.short_id,
-                    } : undefined,
+                    'reality-opts': buildRealityOpts(proxy.tls),
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     udp: getClashUdpValue(proxy),
@@ -271,10 +283,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     sni: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
                     ...this.buildTransportFields(proxy.transport),
-                    'reality-opts': proxy.tls?.reality?.enabled ? {
-                        'public-key': proxy.tls.reality.public_key,
-                        'short-id': proxy.tls.reality.short_id,
-                    } : undefined,
+                    'reality-opts': buildRealityOpts(proxy.tls),
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     ...(proxy.alpn ? { alpn: proxy.alpn } : {}),
