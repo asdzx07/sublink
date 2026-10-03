@@ -1,6 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
-import { APP_NAME, GITHUB_REPO, DOCS_URL, APP_VERSION } from '../constants.js';
+import { APP_NAME, GITHUB_REPO, UPSTREAM_REPO, DOCS_URL, APP_VERSION } from '../constants.js';
 
 export const Footer = () => {
     const currentYear = new Date().getFullYear();
@@ -11,6 +11,10 @@ export const Footer = () => {
                 <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div class="flex flex-col md:flex-row items-center gap-2 md:gap-4 text-gray-600 dark:text-gray-400 text-center md:text-left">
                         <span class="text-sm">© {currentYear} {APP_NAME}. All rights reserved.</span>
+                        <span class="hidden md:inline text-gray-300 dark:text-gray-700">|</span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500">
+                            Forked from <a href={UPSTREAM_REPO} target="_blank" rel="noopener noreferrer" class="underline hover:text-gray-600 dark:hover:text-gray-300">7Sageer/sublink-worker</a>
+                        </span>
                         <span class="hidden md:inline text-gray-300 dark:text-gray-700">|</span>
                         <a
                             href={`${GITHUB_REPO}/releases/tag/v${APP_VERSION}`}
