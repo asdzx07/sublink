@@ -334,7 +334,16 @@ export function createApp(bindings = {}) {
             const queryString = parsedUrl.search;
 
             const shortLinks = requireShortLinkService(services.shortLinks);
-            const code = await shortLinks.createShortLink(queryString, c.req.query('shortCode'));
+            // Optional per-request TTL in seconds (0 = no expiry); falls back to server default
+            const ttlParam = c.req.query('ttl');
+            let ttlSeconds;
+            if (ttlParam !== undefined) {
+                const parsed = parseInt(ttlParam, 10);
+                if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 31536000) {
+                    ttlSeconds = parsed;
+                }
+            }
+            const code = await shortLinks.createShortLink(queryString, c.req.query('shortCode'), ttlSeconds);
             return c.text(code);
         } catch (error) {
             return handleError(c, error, runtime.logger);
