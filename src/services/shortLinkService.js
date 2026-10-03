@@ -14,10 +14,11 @@ export class ShortLinkService {
         return this.kv;
     }
 
-    async createShortLink(queryString, providedCode) {
+    async createShortLink(queryString, providedCode, ttlSeconds) {
         const kv = this.ensureKv();
         const shortCode = providedCode || generateWebPath();
-        const ttl = this.options.shortLinkTtlSeconds;
+        // Per-request TTL takes precedence over the global default; 0 means no expiry
+        const ttl = ttlSeconds !== undefined ? ttlSeconds : this.options.shortLinkTtlSeconds;
         const putOptions = ttl ? { expirationTtl: ttl } : undefined;
         await kv.put(shortCode, queryString, putOptions);
         return shortCode;
