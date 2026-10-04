@@ -613,10 +613,9 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
      * CN domains are matched explicitly against the generated `cn` rule sets so
      * the common case keeps the local fast path.
      *
-     * This method owns the whole rule tail, which is why the base config carries
-     * only the two clash_mode rules: a default build and a user-supplied base
-     * config therefore take the same path, and rules a stored base config pinned
-     * to the old behaviour are recognised and dropped below.
+     * This method owns the whole rule tail; the base config no longer carries
+     * clash_mode rules (dead without experimental.clash_api), so a default build
+     * and a user-supplied base config take the same path here.
      */
     configureDnsRouting(siteRuleSets = []) {
         const dns = this.config?.dns;
@@ -649,9 +648,8 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             const hasGuard = dns.rules.some(rule => Array.isArray(rule?.query_type)
                 && rule.query_type.some(type => ['HTTPS', 'SVCB'].includes(String(type).toUpperCase())));
             if (!hasGuard) {
-                // after the clash_mode rules, before any domain or resolver rule
-                const insertAt = dns.rules.findIndex(rule => rule && rule.clash_mode === undefined);
-                dns.rules.splice(insertAt === -1 ? dns.rules.length : insertAt, 0, guard);
+                // 插到规则最前面，在域名/解析器规则之前
+                dns.rules.unshift(guard);
             }
         }
 
@@ -859,14 +857,11 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         });
 
         // Order matters: sniff first so downstream rules can match on protocol;
-        // hijack-dns before clash_mode so DNS never escapes into a selector when
-        // the user toggles global mode (selectors only support TCP+UDP if the
-        // currently selected node does, which is fragile).
+        // hijack-dns right after so DNS never escapes into a selector.
+        // (clash_mode rules removed: dead without experimental.clash_api)
         this.config.route.rules.unshift(
             { action: 'sniff' },
-            { protocol: 'dns', action: 'hijack-dns' },
-            { clash_mode: 'direct', outbound: 'DIRECT' },
-            { clash_mode: 'global', outbound: this.t('outboundNames.Node Select') }
+            { protocol: 'dns', action: 'hijack-dns' }
         );
 
         this.config.route.auto_detect_interface = true;
