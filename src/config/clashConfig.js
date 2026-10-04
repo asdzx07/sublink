@@ -24,8 +24,10 @@ export const CLASH_CONFIG = {
 	// A connection races the resolved addresses instead of trying them one by one.
 	// Only addresses of the same domain are raced, so nothing extra is disclosed.
 	'tcp-concurrent': true,
-	'geodata-mode': true,
-	'geo-auto-update': true,
+	// 规则全部走 .mrs rule-providers，不用 GEOIP/GEOSITE 语法，
+	// 开着 geodata-mode 只会白白下载几 MB 的 .dat/.mmdb。关掉。
+	'geodata-mode': false,
+	'geo-auto-update': false,
 	'geodata-loader': 'standard',
 	'geo-update-interval': 24,
 	'geox-url': {
@@ -135,11 +137,9 @@ export const CLASH_CONFIG = {
 			'geosite:cn,private': [
 				`https://223.5.5.5/dns-query${NO_SVCB_HINTS}`,
 				`https://120.53.53.53/dns-query${NO_SVCB_HINTS}`
-			],
-			'geosite:geolocation-!cn': [
-				`https://1.1.1.1/dns-query${NO_SVCB_HINTS}`,
-				`https://8.8.8.8/dns-query${NO_SVCB_HINTS}`
 			]
+			// geolocation-!cn 的直连 1.1.1.1/8.8.8.8 DoH 已删除：国内直连基本不通，
+			// fake-ip 模式下境外域名也不需要真实解析，走默认 nameserver 即可
 		}
 	},
 	'proxies': [],
