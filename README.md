@@ -73,13 +73,16 @@ Sing-Box • Clash/Mihomo • Xray/V2Ray • Surge
 - **嗅探配置**：开启域名嗅探但关闭 `override-destination`，防止域名前置绕过规则
 - **广告拦截**：默认 REJECT（原版默认 DIRECT），误杀时可手动切 DIRECT 放行
 - **REALITY 抗量子**：自动为 REALITY 节点添加 `support-x25519mlkem768: true`，适配 bing 等站点的 PQ 握手要求
+- **GeoData 瘦身**：规则全走 .mrs，关闭 `geodata-mode`，不再下载无用的 .dat/.mmdb
+- **境外 DNS 去直连**：删除 `nameserver-policy` 里直连 1.1.1.1/8.8.8.8 的 DoH（国内基本不通，fake-ip 下也不需要真实解析）
 
 ### 📦 sing-box 配置优化
-- **DNS**：DoH 服务器直接用 IP（Cloudflare 1.1.1.1、阿里 223.5.5.5），避免明文 bootstrap 泄露与额外往返
+- **DNS**：DoH 服务器直接用 IP（Cloudflare 1.1.1.1、阿里 223.5.5.5），避免明文 bootstrap 泄露与额外往返；直连 DNS 显式走 DIRECT 出站，防 TUN 回环
 - **fake-ip**：仅 IPv4 段（198.18.0.0/15），避开 IPv6 ULA 地址触发浏览器局域网权限弹窗
 - **支付域名保护**：支付宝、银联、各大银行域名绕过 optimistic cache，防止缓存过期导致支付/登录失败
 - **版本兼容**：针对 sing-box 1.11–1.15 各版本差异做适配（废弃字段清理、Duration 类型修正等）
 - **规则集下载**：走 direct 出站，避免代理回环
+- **死代码清理**：移除无 `clash_api` 时永远匹配不上的 `clash_mode` 规则
 
 ### 🔗 短链接增强
 - **有效期选择**：生成短链接时可选 1小时 / 1天 / 7天 / 30天 / 永久，过期自动失效，适合分享防泄露
