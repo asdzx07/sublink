@@ -32,7 +32,9 @@ export const SING_BOX_CONFIG = {
 				tls: {
 					enabled: true,
 					server_name: "dns.alidns.com"
-				}
+				},
+				// 直连 DNS 必须走 DIRECT 出站，否则 TUN 模式下可能被扔进隧道造成回环
+				detour: "DIRECT"
 			},
 			{
 				// IPv4 only on purpose. A fake IPv6 address can only live in the
@@ -45,22 +47,9 @@ export const SING_BOX_CONFIG = {
 				inet4_range: "198.18.0.0/15"
 			}
 		],
-		// Only the two mode rules live here. The rest of the chain - the SVCB/ECH
-		// guard, the local name filter, the CN split and the fake address rules - is
-		// built by SingboxConfigBuilder.configureDnsRouting, which is also what
-		// protects a user-supplied base config. Keeping a second copy here meant two
-		// places to update and no way to tell which one had won; the default build and
-		// a custom base config now take exactly the same path.
-		rules: [
-			{
-				clash_mode: "direct",
-				server: "dns_direct"
-			},
-			{
-				clash_mode: "global",
-				server: "dns_proxy"
-			}
-		],
+		// DNS 规则由 SingboxConfigBuilder.configureDnsRouting 统一构建，
+		// 这里不再预置 clash_mode 规则（无 clash_api 时它们永远匹配不上）。
+		rules: [],
 		// Only query types fakeip cannot answer land here, so keep them on the
 		// encrypted proxy-side resolver instead of a public resolver reached
 		// outside the tunnel.
