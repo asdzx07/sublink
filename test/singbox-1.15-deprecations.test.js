@@ -134,8 +134,9 @@ describe('sing-box generated dns has no leak path', () => {
         const result = await build('1.14');
         const rules = result.dns.rules;
 
-        expect(rules[0]).toMatchObject({ clash_mode: 'direct', server: 'dns_direct' });
-        expect(rules[1]).toMatchObject({ clash_mode: 'global', server: 'dns_proxy' });
+        // clash_mode rules removed (dead without experimental.clash_api);
+        // SVCB guard is now first
+        expect(rules[0]).toMatchObject({ query_type: ['HTTPS', 'SVCB'], action: 'predefined' });
         // the address answer is the catch-all, exactly like the reference template
         expect(rules[rules.length - 1]).toMatchObject({ query_type: ['A'], server: 'dns_fakeip' });
         expect(result.route.default_domain_resolver).toBe('dns_direct');
@@ -217,13 +218,12 @@ describe('sing-box generated dns has no leak path', () => {
     it('injects the svcb guard into a base config that lacks it', async () => {
         const baseConfig = {
             ...SING_BOX_CONFIG,
-            dns: { ...SING_BOX_CONFIG.dns, rules: [{ clash_mode: 'direct', server: 'dns_direct' }] }
+            dns: { ...SING_BOX_CONFIG.dns, rules: [] }
         };
 
         const result = await build('1.14', baseConfig);
 
-        expect(result.dns.rules[0]).toMatchObject({ clash_mode: 'direct' });
-        expect(result.dns.rules[1]).toMatchObject({ query_type: ['HTTPS', 'SVCB'], action: 'predefined', rcode: 'NOERROR' });
+        expect(result.dns.rules[0]).toMatchObject({ query_type: ['HTTPS', 'SVCB'], action: 'predefined', rcode: 'NOERROR' });
     });
 
     it('keeps cn domains on the local resolver, before the fakeip catch-all', async () => {
