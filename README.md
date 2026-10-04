@@ -4,82 +4,109 @@
   <h1><b>Sublink Worker</b></h1>
   <h5><i>One Worker, All Subscriptions</i></h5>
 
-  <p><b>A lightweight subscription converter and manager for proxy protocols, deployable on Cloudflare Workers, Vercel, Node.js, or Docker.</b></p>
+  <p><b>轻量级代理协议订阅转换与管理工具，可部署于 Cloudflare Workers、Vercel、Node.js 或 Docker。</b></p>
 
-  <p><i>Forked from <a href="https://github.com/7Sageer/sublink-worker">7Sageer/sublink-worker</a> with additional features and customizations.</i></p>
+  <p><i>Fork 自 <a href="https://github.com/7Sageer/sublink-worker">7Sageer/sublink-worker</a>，加入了大量针对国内网络环境的优化与新功能。</i></p>
 
   <br>
 
 <p style="display: flex; align-items: center; gap: 10px;">
   <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/asdzx07/sublink">
-    <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare Workers" style="height: 32px;"/>
+    <img src="https://deploy.workers.cloudflare.com/button" alt="部署到 Cloudflare Workers" style="height: 32px;"/>
   </a>
   <a href="https://vercel.com/new/clone?repository-url=https://github.com/asdzx07/sublink&env=KV_REST_API_URL,KV_REST_API_TOKEN&envDescription=Vercel%20KV%20credentials%20for%20data%20storage&envLink=https://vercel.com/docs/storage/vercel-kv">
-    <img src="https://vercel.com/button" alt="Deploy to Vercel" style="height: 32px;"/>
+    <img src="https://vercel.com/button" alt="部署到 Vercel" style="height: 32px;"/>
   </a>
 </p>
 
-  <h3>📚 Documentation</h3>
+  <h3>📚 文档</h3>
   <p>
-    <a href="https://app.sublink.works"><b>⚡ Live Demo</b></a> ·
-    <a href="https://sublink.works/en/"><b>Documentation</b></a> 
-    <a href="https://sublink.works"><b>中文文档</b></a>·
+    <a href="https://sublink.works"><b>中文文档</b></a> ·
+    <a href="https://sublink.works/en/"><b>English Docs</b></a>
   </p>
   <p>
-    <a href="https://sublink.works/guide/quick-start/">Quick Start</a> ·
-    <a href="https://sublink.works/api/">API Reference</a> ·
-    <a href="https://sublink.works/guide/faq/">FAQ</a>
+    <a href="https://sublink.works/guide/quick-start/">快速上手</a> ·
+    <a href="https://sublink.works/api/">API 参考</a> ·
+    <a href="https://sublink.works/guide/faq/">常见问题</a>
   </p>
 </div>
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### One-Click Deployment
-- Choose a "deploy" button above to click
-- That's it! See the [Document](https://sublink.works/guide/quick-start/) for more information.
+### 一键部署
+- 点击上方任一部署按钮
+- 完成！详见[文档](https://sublink.works/guide/quick-start/)
 
-### Alternative Runtimes
-- **Node.js**: `npm run build:node && node dist/node-server.cjs`
-- **Vercel**: `vercel deploy` (configure KV in project settings)
-- **Docker**: `docker pull ghcr.io/7sageer/sublink-worker:latest`
-- **Docker Compose**: `docker compose up -d` (includes Redis)
+### 其他运行方式
+- **Node.js**：`npm run build:node && node dist/node-server.cjs`
+- **Vercel**：`vercel deploy`（在项目设置中配置 KV）
+- **Docker**：`docker compose up -d`（含 Redis）
 
-## ✨ Features
+## ✨ 功能特性
 
-### Supported Protocols
-ShadowSocks • VMess • VLESS • Hysteria2 • Trojan • TUIC
+### 支持的协议
+ShadowSocks • VMess • VLESS • Hysteria2 • Trojan • TUIC • AnyTLS
 
-### Client Support
-Sing-Box • Clash • Xray/V2Ray • Surge
+### 支持的客户端
+Sing-Box • Clash/Mihomo • Xray/V2Ray • Surge
 
-### Input Support
-- Base64 subscriptions
-- HTTP/HTTPS subscriptions
-- Full configs (Sing-Box JSON, Clash YAML, Surge INI)
+### 输入支持
+- Base64 订阅
+- HTTP/HTTPS 订阅链接
+- 完整配置（Sing-Box JSON、Clash YAML、Surge INI）
 
-### Core Capabilities
-- Import subscriptions from multiple sources
-- Generate fixed/random short links (KV-based)
-- Light/Dark theme toggle
-- Flexible API for script automation
-- Multi-language support (Chinese, English, Persian, Russian)
-- Web interface with predefined rule sets and customizable policy groups
+### 核心能力
+- 多源订阅聚合导入
+- 短链接生成（固定/随机，KV 存储，可设有效期）
+- 浅色/深色主题切换
+- 灵活的 API，便于脚本自动化
+- 多语言（中文、英文、波斯语、俄语）
+- Web 界面，内置规则集与可自定义策略组
 
-## 🤝 Contributing
+## 🔧 相对于原版的定制
 
-Issues and Pull Requests are welcome to improve this project.
+### 🌐 Clash/Mihomo 配置加固
+- **ECH/SVCB 防护**：禁用 qtype 64/65 查询，防止 Cloudflare 站点因 fake-ip + ECH 握手失败无法访问
+- **延迟测试优化**：`unified-delay` + `tcp-concurrent`，延迟显示更准确
+- **TUN 配置**：mips 协议栈、strict-route、防 DNS 泄露（dns-hijack 接管 53 端口）
+- **配置持久化**：记住手动选择的节点与 fake-ip 缓存，重启不丢失
+- **嗅探配置**：开启域名嗅探但关闭 `override-destination`，防止域名前置绕过规则
+- **广告拦截**：默认 REJECT（原版默认 DIRECT），误杀时可手动切 DIRECT 放行
+- **REALITY 抗量子**：自动为 REALITY 节点添加 `support-x25519mlkem768: true`，适配 bing 等站点的 PQ 握手要求
 
-## 📄 License
+### 📦 sing-box 配置优化
+- **DNS**：DoH 服务器直接用 IP（Cloudflare 1.1.1.1、阿里 223.5.5.5），避免明文 bootstrap 泄露与额外往返
+- **fake-ip**：仅 IPv4 段（198.18.0.0/15），避开 IPv6 ULA 地址触发浏览器局域网权限弹窗
+- **支付域名保护**：支付宝、银联、各大银行域名绕过 optimistic cache，防止缓存过期导致支付/登录失败
+- **版本兼容**：针对 sing-box 1.11–1.15 各版本差异做适配（废弃字段清理、Duration 类型修正等）
+- **规则集下载**：走 direct 出站，避免代理回环
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### 🔗 短链接增强
+- **有效期选择**：生成短链接时可选 1小时 / 1天 / 7天 / 30天 / 永久，过期自动失效，适合分享防泄露
+- 短链接按输出格式隔离存储（clash/singbox/surge 互不串扰）
 
-## ⚠️ Disclaimer
+### 🎨 界面与品牌
+- 导航栏/页脚指向本仓库，页脚保留原作者来源标注
+- 移除原版文档按钮（文档站为原作者维护）
 
-This project is for learning and exchange purposes only. Please do not use it for illegal purposes. All consequences resulting from the use of this project are solely the responsibility of the user and are not related to the developer.
+### 🔒 安全
+- 自定义规则的 site/ip 标识符做严格校验，防止 SSRF/URL 注入（CWE-918）
 
-## ⭐ Star History
+## 🤝 参与贡献
 
-Thanks to everyone who has starred this project! 🌟
+欢迎提交 Issue 和 Pull Request 改进本项目。
+
+## 📄 开源协议
+
+本项目基于 MIT 协议开源，详见 [LICENSE](LICENSE) 文件。
+
+## ⚠️ 免责声明
+
+本项目仅供学习交流使用，请勿用于非法用途。因使用本项目产生的一切后果由使用者自行承担，与开发者无关。
+
+## ⭐ Star 历史
+
+感谢每一位 star 本项目的朋友！🌟
 
 <a href="https://star-history.com/#asdzx07/sublink&Date">
  <picture>
