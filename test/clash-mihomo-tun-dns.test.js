@@ -69,15 +69,15 @@ describe('mihomo dns leak prevention', () => {
         });
     });
 
-    it('resolves non-china domains through encrypted resolvers that respect the rules', async () => {
+    it('does not pin foreign domains to direct 1.1.1.1/8.8.8.8 DoH (unreachable from CN)', async () => {
         const config = await buildConfig();
-        const foreign = config.dns['nameserver-policy']['geosite:geolocation-!cn'];
+        const policy = config.dns['nameserver-policy'] || {};
 
         expect(config.dns['respect-rules']).toBe(true);
         expect(config.dns['enhanced-mode']).toBe('fake-ip');
-        foreign.forEach(server => {
-            expect(server).toMatch(/^https:\/\/(?:1\.1\.1\.1|8\.8\.8\.8)\/dns-query/);
-        });
+        // geolocation-!cn policy removed: direct DoH to 1.1.1.1/8.8.8.8 times out
+        // in China, and fake-ip needs no real resolution anyway
+        expect(policy['geosite:geolocation-!cn']).toBeUndefined();
     });
 
     it('keeps local and private hostnames out of the fake-ip pool', async () => {
