@@ -430,15 +430,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 const name = this.t(`outboundNames.${outbound}`);
                 if (!this.hasProxyGroup(name)) {
                     let proxies = this.buildSelectGroupMembers(proxyList);
-                    // For rules that should default to DIRECT, move DIRECT to the front
-                    if (DIRECT_DEFAULT_RULES.has(outbound)) {
-                        proxies = ['DIRECT', ...proxies.filter(p => p !== 'DIRECT')];
-                    }
-                    // Ad-block rules must actually block by default: REJECT leads
-                    // the group (a select group defaults to its first member),
-                    // DIRECT stays as an escape hatch for rule-set false positives.
+                    // Ad-block: REJECT + DIRECT only. Node options are
+                    // meaningless for ads and invite accidental mis-selection;
+                    // DIRECT stays as an escape hatch for false positives.
                     if (REJECT_ACTION_RULES.has(outbound)) {
-                        proxies = ['REJECT', 'DIRECT', ...proxies.filter(p => p !== 'REJECT' && p !== 'DIRECT')];
+                        proxies = ['REJECT', 'DIRECT'];
+                    }
+                    // Private / domestic services: DIRECT leads, Node Select
+                    // only as a manual fallback. Country/auto-select members
+                    // are pointless for these groups.
+                    else if (DIRECT_DEFAULT_RULES.has(outbound)) {
+                        proxies = ['DIRECT', this.t('outboundNames.Node Select')];
                     }
                     const group = {
                         type: "select",

@@ -39,3 +39,21 @@ describe('clash ad-block group defaults to REJECT', () => {
         }
     });
 });
+
+describe('clash trimmed rule groups', () => {
+    it('ad-block group contains only REJECT and DIRECT', async () => {
+        const groups = await buildGroups(['Ad Block']);
+        const adGroup = groups.find(g => g && g.name === '🛑 广告拦截');
+        expect(adGroup).toBeDefined();
+        expect(adGroup.proxies).toEqual(['REJECT', 'DIRECT']);
+    });
+
+    it('Private and Location:CN groups contain only DIRECT and Node Select', async () => {
+        const groups = await buildGroups(['Private', 'Location:CN']);
+        for (const name of ['🏠 私有网络', '🔒 国内服务']) {
+            const group = groups.find(g => g && g.name === name);
+            expect(group).toBeDefined();
+            expect(group.proxies).toEqual(['DIRECT', '🚀 节点选择']);
+        }
+    });
+});
