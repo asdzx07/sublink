@@ -1,6 +1,6 @@
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { groupProxiesByCountry } from '../utils.js';
-import { SURGE_CONFIG, SURGE_SITE_RULE_SET_BASEURL, SURGE_IP_RULE_SET_BASEURL, generateRules, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES } from '../config/index.js';
+import { SURGE_CONFIG, SURGE_SITE_RULE_SET_BASEURL, SURGE_IP_RULE_SET_BASEURL, generateRules, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES, REJECT_ACTION_RULES } from '../config/index.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
 import { buildSelectorMembers, buildNodeSelectMembers, buildCustomRuleMembers, uniqueNames } from './helpers/groupBuilder.js';
 
@@ -282,9 +282,15 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
                 if (this.hasProxyGroup(name)) {
                     return;
                 }
-                // For rules that should default to DIRECT, move DIRECT to the front
-                if (DIRECT_DEFAULT_RULES.has(outbound)) {
-                    options = ['DIRECT', ...options.filter(p => p !== 'DIRECT')];
+                // Ad-block: REJECT + DIRECT only. Node options are meaningless
+                // for ads; REJECT leading also stops ads leaking through the proxy.
+                if (REJECT_ACTION_RULES.has(outbound)) {
+                    options = ['REJECT', 'DIRECT'];
+                }
+                // Private / domestic services: DIRECT leads, Node Select only
+                // as a manual fallback. Country/auto-select members are pointless here.
+                else if (DIRECT_DEFAULT_RULES.has(outbound)) {
+                    options = ['DIRECT', this.t('outboundNames.Node Select')];
                 }
                 this.config['proxy-groups'].push(
                     this.createProxyGroup(name, 'select', options)

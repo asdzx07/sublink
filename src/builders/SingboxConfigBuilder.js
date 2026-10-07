@@ -236,9 +236,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                 if (this.hasOutboundTag(tag)) {
                     return;
                 }
-                // For rules that should default to DIRECT, move DIRECT to the front
+                // Private / domestic services: DIRECT leads, Node Select only as
+                // a manual fallback. Country/auto-select members are pointless here.
                 if (DIRECT_DEFAULT_RULES.has(outbound)) {
-                    selectorMembers = ['DIRECT', ...selectorMembers.filter(p => p !== 'DIRECT')];
+                    selectorMembers = ['DIRECT', this.t('outboundNames.Node Select')];
                 }
                 this.config.outbounds.push({
                     type: "selector",
