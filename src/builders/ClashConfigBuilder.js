@@ -249,6 +249,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     ...(proxy.alpn ? { alpn: proxy.alpn } : {}),
                     ...(proxy.packet_encoding ? { 'packet-encoding': proxy.packet_encoding } : {}),
                     'flow': proxy.flow ?? undefined,
+                    // VLESS Encryption seed. Only Mihomo consumes it, so it is
+                    // not emitted for sing-box (rejects unknown fields) or
+                    // Surge (no support).
+                    ...(proxy.encryption ? { encryption: proxy.encryption } : {}),
                 };
             case 'hysteria2':
                 return {

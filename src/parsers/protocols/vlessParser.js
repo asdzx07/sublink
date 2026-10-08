@@ -18,6 +18,12 @@ export function parseVless(url) {
     // `udp` is a Clash-only flag; ClashConfigBuilder reads it, SingboxConfigBuilder strips it.
     const udp = params.udp !== undefined ? parseBool(params.udp) : undefined;
 
+    // VLESS Encryption: keep the seed for builders that can emit it
+    // (Mihomo). "none" carries no information, drop it like before.
+    const encryption = params.encryption && params.encryption !== 'none'
+        ? params.encryption
+        : undefined;
+
     return {
         type: 'vless',
         tag: name,
@@ -28,6 +34,7 @@ export function parseVless(url) {
         tls,
         transport,
         flow: params.flow ?? undefined,
+        ...(encryption !== undefined ? { encryption } : {}),
         ...(udp !== undefined ? { udp } : {})
     };
 }

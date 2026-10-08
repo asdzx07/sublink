@@ -118,6 +118,7 @@ export function convertYamlProxyToObject(p) {
                 transport,
                 network: transport?.type || 'tcp',
                 flow: p.flow ?? undefined,
+                ...(p.encryption ? { encryption: p.encryption } : {}),
                 udp: typeof p.udp !== 'undefined' ? !!p.udp : undefined,
                 packet_encoding: p['packet-encoding'],
                 alpn: toArray(p.alpn)
