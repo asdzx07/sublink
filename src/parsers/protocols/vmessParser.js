@@ -34,7 +34,15 @@ export function parseVmess(url) {
         base64WithFragment = base64WithFragment.slice(0, hashPos);
     }
 
-    let vmessConfig = JSON.parse(decodeBase64(base64WithFragment));
+    let vmessConfig;
+    try {
+        vmessConfig = JSON.parse(decodeBase64(base64WithFragment));
+    } catch {
+        return undefined;
+    }
+    if (!vmessConfig || typeof vmessConfig !== 'object') {
+        return undefined;
+    }
     let tls = { enabled: false };
     let transport;
     const networkType = vmessConfig.net || 'tcp';
@@ -85,9 +93,9 @@ export function parseVmess(url) {
         tag: tagOverride || vmessConfig.ps,
         type: 'vmess',
         server: vmessConfig.add,
-        server_port: parseInt(vmessConfig.port),
+        server_port: parseInt(vmessConfig.port, 10),
         uuid: vmessConfig.id,
-        alter_id: parseInt(vmessConfig.aid) || 0,
+        alter_id: parseInt(vmessConfig.aid, 10) || 0,
         security: vmessConfig.scy || 'auto',
         tcp_fast_open: false,
         transport,

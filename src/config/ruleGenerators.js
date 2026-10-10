@@ -63,8 +63,8 @@ export function generateRules(selectedRules = [], customRules = []) {
 		}
 	});
 
-	customRules.reverse();
-	customRules.forEach((rule) => {
+	const orderedCustomRules = Array.isArray(customRules) ? [...customRules].reverse() : [];
+	orderedCustomRules.forEach((rule) => {
 		rules.unshift({
 			site_rules: sanitizeRuleIds(rule.site),
 			ip_rules: sanitizeRuleIds(rule.ip),

@@ -158,7 +158,7 @@ export const Layout = (props) => {
                   const now = Date.now();
                   
                   // Only check once per hour to avoid rate limiting
-                  if (lastCheck && (now - parseInt(lastCheck)) < 3600000) {
+                  if (lastCheck && (now - parseInt(lastCheck, 10)) < 3600000) {
                     const cachedVersion = localStorage.getItem('sublink_latest_version');
                     if (cachedVersion && cachedVersion !== dismissedVersion && this.compareVersions(cachedVersion, this.currentVersion) > 0) {
                       this.latestVersion = cachedVersion;

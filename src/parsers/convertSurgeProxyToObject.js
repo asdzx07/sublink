@@ -69,7 +69,7 @@ export function convertSurgeProxyToObject(line) {
 
     const type = parts[0].toLowerCase();
     const server = parts[1];
-    const port = parseInt(parts[2]);
+    const port = parseInt(parts[2], 10);
 
     if (!server || isNaN(port)) return null;
 
@@ -121,7 +121,7 @@ export function convertSurgeProxyToObject(line) {
                 server,
                 server_port: port,
                 uuid: params.username || params.uuid,
-                alter_id: parseInt(params.alterId) || 0,
+                alter_id: parseInt(params.alterId, 10) || 0,
                 security: params.cipher || params.security || 'auto',
                 network: 'tcp',
                 tcp_fast_open: parseBool(params.tfo || params['tcp-fast-open']),

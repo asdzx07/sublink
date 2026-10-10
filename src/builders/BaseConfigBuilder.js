@@ -2,6 +2,8 @@ import { ProxyParser } from '../parsers/index.js';
 import { createStableProviderName, deepCopy, tryDecodeSubscriptionLines, decodeBase64, isInfoNodeName } from '../utils.js';
 import { createTranslator } from '../i18n/index.js';
 import { generateRules, getOutbounds, PREDEFINED_RULE_SETS } from '../config/index.js';
+import { parseSubscriptionContent } from '../parsers/subscription/subscriptionContentParser.js';
+import { fetchSubscriptionWithFormat } from '../parsers/subscription/httpSubscriptionFetcher.js';
 
 export class BaseConfigBuilder {
     constructor(inputString, baseConfig, lang, userAgent, groupByCountry = false, includeAutoSelect = true) {
@@ -30,9 +32,6 @@ export class BaseConfigBuilder {
     async parseCustomItems() {
         const input = this.inputString || '';
         const parsedItems = [];
-
-        // Import the content parser for direct input parsing
-        const { parseSubscriptionContent } = await import('../parsers/subscription/subscriptionContentParser.js');
 
         // Try to parse the entire input as a config format (Sing-Box JSON or Clash YAML)
         const directResult = parseSubscriptionContent(input);
@@ -89,8 +88,6 @@ export class BaseConfigBuilder {
 
                 // Check if it's an HTTP(S) URL - may use as provider if format matches
                 if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
-                    const { fetchSubscriptionWithFormat } = await import('../parsers/subscription/httpSubscriptionFetcher.js');
-
                     try {
                         const fetchResult = await fetchSubscriptionWithFormat(trimmedUrl, this.userAgent);
                         if (fetchResult) {
@@ -202,7 +199,6 @@ export class BaseConfigBuilder {
      */
     async collectProviderNodeNames(content) {
         try {
-            const { parseSubscriptionContent } = await import('../parsers/subscription/subscriptionContentParser.js');
             const result = parseSubscriptionContent(content);
             const proxies = Array.isArray(result?.proxies) ? result.proxies : [];
             proxies.forEach(proxy => {

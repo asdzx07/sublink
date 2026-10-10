@@ -25,13 +25,17 @@ export class UpstashKVAdapter {
     }
 
     async execute(command) {
+        const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(10000)
+            : undefined;
         const response = await fetch(this.url, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${this.token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(command)
+            body: JSON.stringify(command),
+            ...(signal ? { signal } : {})
         });
 
         if (!response.ok) {

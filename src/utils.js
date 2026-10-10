@@ -7,25 +7,37 @@ export function checkStartsWith(str, prefix) {
 	if (str === undefined || str === null || prefix === undefined || prefix === null) {
 		return false;
 	}
-	str = String(str);
-	prefix = String(prefix);
-	return str.slice(0, prefix.length) === prefix;
+	return String(str).startsWith(String(prefix));
 }
 
 
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const B64_LOOKUP = new Int8Array(256).fill(-1);
+for (let i = 0; i < 64; i++) {
+	B64_LOOKUP[BASE64_CHARS.charCodeAt(i)] = i;
+}
+
 // Base64 编码函数
 export function encodeBase64(input) {
+	if (typeof Buffer !== 'undefined') {
+		return Buffer.from(input, 'utf-8').toString('base64');
+	}
 	const encoder = new TextEncoder();
 	const utf8Array = encoder.encode(input);
 	let binaryString = '';
-	for (const byte of utf8Array) {
-		binaryString += String.fromCharCode(byte);
+	const chunkSize = 8192;
+	for (let i = 0; i < utf8Array.length; i += chunkSize) {
+		const chunk = utf8Array.subarray(i, i + chunkSize);
+		binaryString += String.fromCharCode.apply(null, chunk);
 	}
 	return base64FromBinary(binaryString);
 }
 
 // Base64 解码函数
 export function decodeBase64(input) {
+	if (typeof Buffer !== 'undefined') {
+		return Buffer.from(input, 'base64').toString('utf-8');
+	}
 	const binaryString = base64ToBinary(input);
 	const bytes = new Uint8Array(binaryString.length);
 	for (let i = 0; i < binaryString.length; i++) {
@@ -37,7 +49,7 @@ export function decodeBase64(input) {
 
 // 将二进制字符串转换为 Base64（编码）
 export function base64FromBinary(binaryString) {
-	const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	const base64Chars = BASE64_CHARS;
 	let base64String = '';
 	let padding = '';
 
@@ -48,15 +60,14 @@ export function base64FromBinary(binaryString) {
 	}
 
 	for (let i = 0; i < binaryString.length; i += 3) {
-		const bytes = [
-			binaryString.charCodeAt(i),
-			binaryString.charCodeAt(i + 1),
-			binaryString.charCodeAt(i + 2)
-		];
-		const base64Index1 = bytes[0] >> 2;
-		const base64Index2 = ((bytes[0] & 3) << 4) | (bytes[1] >> 4);
-		const base64Index3 = ((bytes[1] & 15) << 2) | (bytes[2] >> 6);
-		const base64Index4 = bytes[2] & 63;
+		const b0 = binaryString.charCodeAt(i);
+		const b1 = binaryString.charCodeAt(i + 1);
+		const b2 = binaryString.charCodeAt(i + 2);
+
+		const base64Index1 = b0 >> 2;
+		const base64Index2 = ((b0 & 3) << 4) | (b1 >> 4);
+		const base64Index3 = ((b1 & 15) << 2) | (b2 >> 6);
+		const base64Index4 = b2 & 63;
 
 		base64String += base64Chars[base64Index1] +
 			base64Chars[base64Index2] +
@@ -69,24 +80,23 @@ export function base64FromBinary(binaryString) {
 
 // 将 Base64 转换为二进制字符串（解码）
 export function base64ToBinary(base64String) {
-	const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-	let binaryString = '';
 	base64String = base64String.replace(/=+$/, ''); // 去掉末尾的 '='
+	const len = base64String.length;
+	let binaryString = '';
 
-	for (let i = 0; i < base64String.length; i += 4) {
-		const bytes = [
-			base64Chars.indexOf(base64String[i]),
-			base64Chars.indexOf(base64String[i + 1]),
-			base64Chars.indexOf(base64String[i + 2]),
-			base64Chars.indexOf(base64String[i + 3])
-		];
-		const byte1 = (bytes[0] << 2) | (bytes[1] >> 4);
-		const byte2 = ((bytes[1] & 15) << 4) | (bytes[2] >> 2);
-		const byte3 = ((bytes[2] & 3) << 6) | bytes[3];
+	for (let i = 0; i < len; i += 4) {
+		const c0 = B64_LOOKUP[base64String.charCodeAt(i)] ?? -1;
+		const c1 = (i + 1 < len) ? (B64_LOOKUP[base64String.charCodeAt(i + 1)] ?? -1) : -1;
+		const c2 = (i + 2 < len) ? (B64_LOOKUP[base64String.charCodeAt(i + 2)] ?? -1) : -1;
+		const c3 = (i + 3 < len) ? (B64_LOOKUP[base64String.charCodeAt(i + 3)] ?? -1) : -1;
 
-		if (bytes[1] !== -1) binaryString += String.fromCharCode(byte1);
-		if (bytes[2] !== -1) binaryString += String.fromCharCode(byte2);
-		if (bytes[3] !== -1) binaryString += String.fromCharCode(byte3);
+		const byte1 = (c0 << 2) | (c1 >> 4);
+		const byte2 = ((c1 & 15) << 4) | (c2 >> 2);
+		const byte3 = ((c2 & 3) << 6) | c3;
+
+		if (c1 !== -1) binaryString += String.fromCharCode(byte1);
+		if (c2 !== -1) binaryString += String.fromCharCode(byte2);
+		if (c3 !== -1) binaryString += String.fromCharCode(byte3);
 	}
 
 	return binaryString;
@@ -315,7 +325,7 @@ export function parseServerInfo(serverInfo) {
 		host = serverInfo.slice(0, lastColonIndex);
 		port = serverInfo.slice(lastColonIndex + 1);
 	}
-	return { host, port: parseInt(port) };
+	return { host, port: parseInt(port, 10) };
 }
 
 export function parseUrlParams(url) {
@@ -474,35 +484,35 @@ export const COUNTRY_DATA = {
 	'AE': { name: 'United Arab Emirates', emoji: '🇦🇪', aliases: ['阿联酋', 'United Arab Emirates'] },
 };
 
-export function parseCountryFromNodeName(nodeName) {
-	// Build patterns sorted by length descending so longer aliases match first
-	// (e.g. "Indonesia" before "India", "United States" before "US").
-	// Short aliases (<=3 chars, all ASCII, e.g. US, UK, HK) get \b word boundaries
-	// to prevent false positives like "plus" matching "US".
-	const allEntries = Object.values(COUNTRY_DATA).flatMap(c =>
-		c.aliases.map(alias => ({ alias, escaped: alias.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') }))
-	);
-	allEntries.sort((a, b) => b.alias.length - a.alias.length);
+// Pre-compile country matching regex and alias lookup table once at module load
+const PRECOMPILED_COUNTRY_ENTRIES = Object.values(COUNTRY_DATA).flatMap(c =>
+	c.aliases.map(alias => ({ alias, escaped: alias.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') }))
+);
+PRECOMPILED_COUNTRY_ENTRIES.sort((a, b) => b.alias.length - a.alias.length);
 
-	const patterns = allEntries.map(({ alias, escaped }) => {
-		if (alias.length <= 3 && /^[A-Za-z]+$/.test(alias)) {
-			return `\\b${escaped}\\b`;
-		}
-		return escaped;
-	});
-
-	const regex = new RegExp(patterns.join('|'), 'i');
-	const match = nodeName.match(regex);
-
-	if (match) {
-		const matchedAlias = match[0];
-		for (const code in COUNTRY_DATA) {
-			if (COUNTRY_DATA[code].aliases.some(alias => alias.toLowerCase() === matchedAlias.toLowerCase())) {
-				return { code, ...COUNTRY_DATA[code] };
-			}
-		}
+const PRECOMPILED_COUNTRY_PATTERNS = PRECOMPILED_COUNTRY_ENTRIES.map(({ alias, escaped }) => {
+	if (alias.length <= 3 && /^[A-Za-z]+$/.test(alias)) {
+		return `\\b${escaped}\\b`;
 	}
+	return escaped;
+});
 
+const COUNTRY_PARSER_REGEX = new RegExp(PRECOMPILED_COUNTRY_PATTERNS.join('|'), 'i');
+
+const ALIAS_TO_COUNTRY_MAP = new Map();
+for (const code in COUNTRY_DATA) {
+	const info = COUNTRY_DATA[code];
+	for (const alias of info.aliases) {
+		ALIAS_TO_COUNTRY_MAP.set(alias.toLowerCase(), { code, ...info });
+	}
+}
+
+export function parseCountryFromNodeName(nodeName) {
+	if (!nodeName || typeof nodeName !== 'string') return null;
+	const match = nodeName.match(COUNTRY_PARSER_REGEX);
+	if (match) {
+		return ALIAS_TO_COUNTRY_MAP.get(match[0].toLowerCase()) || null;
+	}
 	return null;
 }
 

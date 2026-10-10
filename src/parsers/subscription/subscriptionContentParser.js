@@ -29,8 +29,8 @@ export function parseSingboxJson(content) {
                 !SINGBOX_NON_PROXY_TYPES.has(o.type)
             );
             if (proxies.length > 0) {
-                const configOverrides = deepCopy(parsed);
-                delete configOverrides.outbounds;
+                const { outbounds: _outbounds, ...restConfig } = parsed;
+                const configOverrides = deepCopy(restConfig);
 
                 // Extract selector/urltest outbounds and convert to Clash proxy-groups format
                 const proxyGroups = parsed.outbounds
@@ -97,7 +97,7 @@ function parseInterval(interval) {
     if (typeof interval === 'string') {
         const match = interval.match(/^(\d+)(s|m|h)?$/);
         if (match) {
-            const value = parseInt(match[1]);
+            const value = parseInt(match[1], 10);
             const unit = match[2] || 's';
             switch (unit) {
                 case 'h': return value * 3600;
@@ -105,7 +105,7 @@ function parseInterval(interval) {
                 default: return value;
             }
         }
-        return parseInt(interval) || 300;
+        return parseInt(interval, 10) || 300;
     }
     return 300;
 }
@@ -123,8 +123,8 @@ export function parseClashYaml(content) {
                 .map(p => convertYamlProxyToObject(p))
                 .filter(p => p != null);
             if (proxies.length > 0) {
-                const configOverrides = deepCopy(parsed);
-                delete configOverrides.proxies;
+                const { proxies: _proxies, ...restConfig } = parsed;
+                const configOverrides = deepCopy(restConfig);
                 return {
                     type: 'yamlConfig',
                     proxies,
@@ -158,22 +158,17 @@ export function parseSurgeIni(content) {
                 .map(line => convertSurgeProxyToObject(line))
                 .filter(p => p != null);
             if (proxies.length > 0) {
-                const configOverrides = deepCopy(parsed);
-                // Remove fields that are handled separately
-                delete configOverrides.proxies;
+                const { proxies: _proxies, 'proxy-groups': rawProxyGroups, ...restConfig } = parsed;
+                const configOverrides = deepCopy(restConfig);
 
                 // Convert Surge proxy-group strings to Clash-compatible objects
-                if (Array.isArray(parsed['proxy-groups']) && parsed['proxy-groups'].length > 0) {
-                    const proxyGroups = parsed['proxy-groups']
+                if (Array.isArray(rawProxyGroups) && rawProxyGroups.length > 0) {
+                    const proxyGroups = rawProxyGroups
                         .map(line => parseSurgeProxyGroupLine(line))
                         .filter(g => g != null);
                     if (proxyGroups.length > 0) {
                         configOverrides['proxy-groups'] = proxyGroups;
-                    } else {
-                        delete configOverrides['proxy-groups'];
                     }
-                } else {
-                    delete configOverrides['proxy-groups'];
                 }
 
                 return {
@@ -237,7 +232,7 @@ function parseSurgeProxyGroupLine(line) {
         group.url = extras.url;
     }
     if (extras.interval) {
-        group.interval = parseInt(extras.interval) || 300;
+        group.interval = parseInt(extras.interval, 10) || 300;
     }
 
     return group;

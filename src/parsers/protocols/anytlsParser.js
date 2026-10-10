@@ -34,7 +34,7 @@ export function parseAnytls(url) {
     const server = parsedUrl.hostname.startsWith('[') && parsedUrl.hostname.endsWith(']')
         ? parsedUrl.hostname.slice(1, -1)
         : parsedUrl.hostname;
-    const port = parsedUrl.port ? parseInt(parsedUrl.port) : 443;
+    const port = parsedUrl.port ? parseInt(parsedUrl.port, 10) : 443;
     const password = decodeComponent(parsedUrl.username);
     const fragment = decodeComponent(parsedUrl.hash.slice(1));
     const defaultTagServer = server.includes(':') ? `[${server}]` : server;

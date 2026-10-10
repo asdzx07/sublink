@@ -65,7 +65,7 @@ function createConfig(tag, server, server_port, method, password, pluginInfo) {
         tag: tag || 'Shadowsocks',
         type: 'shadowsocks',
         server,
-        server_port: parseInt(server_port),
+        server_port: parseInt(server_port, 10),
         method,
         password,
         tcp_fast_open: false

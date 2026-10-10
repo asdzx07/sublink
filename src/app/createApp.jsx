@@ -283,7 +283,14 @@ export function createApp(bindings = {}) {
 
             if (trimmedProxy.startsWith('http://') || trimmedProxy.startsWith('https://')) {
                 try {
-                    const response = await fetch(trimmedProxy, { method: 'GET', headers });
+                    const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+                        ? AbortSignal.timeout(15000)
+                        : undefined;
+                    const response = await fetch(trimmedProxy, {
+                        method: 'GET',
+                        headers,
+                        ...(signal ? { signal } : {})
+                    });
                     const fetchedUserinfo = response.headers.get('subscription-userinfo');
                     if (fetchedUserinfo && subscriptionUserinfo === undefined) {
                         subscriptionUserinfo = fetchedUserinfo;

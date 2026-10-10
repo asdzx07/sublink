@@ -32,6 +32,10 @@ export class ProxyParser {
         if (!parser) {
             return undefined;
         }
-        return parser(trimmed, userAgent);
+        try {
+            return await parser(trimmed, userAgent);
+        } catch {
+            return undefined;
+        }
     }
 }

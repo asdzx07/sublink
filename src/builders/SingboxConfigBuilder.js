@@ -163,6 +163,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                 const { tag: _incomingTag, ...restIncoming } = incoming;
                 const { tag: _existingTag, ...restExisting } = existing;
                 return JSON.stringify(restIncoming) === JSON.stringify(restExisting);
+            },
+            getSignature: (item = {}) => {
+                const { tag: _t, ...rest } = item;
+                return JSON.stringify(rest);
             }
         });
     }

@@ -116,6 +116,35 @@ function detectFormat(content) {
     return 'unknown';
 }
 
+const DEFAULT_FETCH_TIMEOUT_MS = 15000;
+
+function createFetchSignal(timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+        return AbortSignal.timeout(timeoutMs);
+    }
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), timeoutMs);
+    return controller.signal;
+}
+
+async function fetchRawSubscription(url, userAgent, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
+    const headers = new Headers();
+    if (userAgent) {
+        headers.set('User-Agent', userAgent);
+    }
+    const signal = createFetchSignal(timeoutMs);
+    const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal
+    });
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const text = await response.text();
+    return { text, response };
+}
+
 /**
  * Fetch subscription content from a URL and parse it
  * @param {string} url - The subscription URL to fetch
@@ -124,20 +153,8 @@ function detectFormat(content) {
  */
 export async function fetchSubscription(url, userAgent) {
     try {
-        const headers = new Headers();
-        if (userAgent) {
-            headers.set('User-Agent', userAgent);
-        }
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: headers
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const text = await response.text();
+        const { text } = await fetchRawSubscription(url, userAgent);
         const decodedText = decodeContent(text);
-
         return parseSubscriptionContent(decodedText);
     } catch (error) {
         console.error('Error fetching or parsing HTTP(S) content:', error);
@@ -153,18 +170,7 @@ export async function fetchSubscription(url, userAgent) {
  */
 export async function fetchSubscriptionWithFormat(url, userAgent) {
     try {
-        const headers = new Headers();
-        if (userAgent) {
-            headers.set('User-Agent', userAgent);
-        }
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: headers
-        });
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const text = await response.text();
+        const { text, response } = await fetchRawSubscription(url, userAgent);
         const content = decodeContent(text);
         const format = detectFormat(content);
 
