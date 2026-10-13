@@ -83,6 +83,14 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
                     sanitized[key] = `${sanitized[key]}s`;
                 }
             });
+            // Default to chrome uTLS fingerprint for AnyTLS (share links don't carry it,
+            // and some clients fail without an explicit fingerprint)
+            if (sanitized.tls && !sanitized.tls.utls) {
+                sanitized.tls = {
+                    ...sanitized.tls,
+                    utls: { enabled: true, fingerprint: 'chrome' },
+                };
+            }
         }
 
         // Strip Clash-only / mis-typed fields that conflict with sing-box semantics.
