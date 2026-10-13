@@ -6,7 +6,7 @@
 export const UNIFIED_RULES = [
 	{
 		name: 'Ad Block',
-		site_rules: ['category-ads-all'],
+		site_rules: ['category-ads-all', 'adobe'],
 		ip_rules: []
 	},
 	{
