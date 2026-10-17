@@ -522,19 +522,17 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     // Fix outbound references in selector/urltest groups (case mismatch for DIRECT etc.)
     // A dangling reference makes sing-box fail with "dependency not found".
     sanitizeOutboundReferences() {
-        const tagMap = new Map();
-        for (const o of this.config.outbounds || []) {
-            if (o?.tag) tagMap.set(o.tag.toLowerCase(), o.tag);
-        }
-        if (tagMap.size === 0) return;
+        const actualTags = new Set((this.config.outbounds || []).map(o => o?.tag).filter(Boolean));
+        if (actualTags.size === 0) return;
+        const lowerMap = new Map();
+        for (const tag of actualTags) lowerMap.set(tag.toLowerCase(), tag);
 
         for (const o of this.config.outbounds || []) {
             if ((o?.type !== 'selector' && o?.type !== 'urltest') || !Array.isArray(o.outbounds)) continue;
             o.outbounds = o.outbounds.map(ref => {
                 if (typeof ref !== 'string') return ref;
-                if (tagMap.has(ref)) return ref;
-                const fixed = tagMap.get(ref.toLowerCase());
-                return fixed || ref;
+                if (actualTags.has(ref)) return ref;
+                return lowerMap.get(ref.toLowerCase()) || ref;
             });
         }
     }
