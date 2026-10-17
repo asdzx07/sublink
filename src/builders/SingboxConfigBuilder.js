@@ -482,6 +482,43 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             });
     }
 
+    // Drop or fix rule_set references that don't match any defined tag.
+    // A dangling reference makes sing-box refuse the whole config at startup.
+    sanitizeRuleSetReferences() {
+        const defined = new Set((this.config.route?.rule_set || []).map(rs => rs?.tag).filter(Boolean));
+        if (defined.size === 0) return;
+
+        const fixTag = tag => {
+            if (defined.has(tag)) return tag;
+            // Legacy builds prefixed tags with geosite-; strip it if the bare tag exists.
+            if (typeof tag === 'string' && tag.startsWith('geosite-')) {
+                const bare = tag.slice('geosite-'.length);
+                if (defined.has(bare)) return bare;
+            }
+            return null;
+        };
+
+        const fixRuleSet = value => {
+            if (Array.isArray(value)) {
+                const fixed = value.map(fixTag).filter(Boolean);
+                return fixed.length > 0 ? fixed : null;
+            }
+            if (typeof value === 'string') return fixTag(value);
+            return value;
+        };
+
+        for (const section of [this.config.route, this.config.dns]) {
+            if (!section || !Array.isArray(section.rules)) continue;
+            section.rules = section.rules.filter(rule => {
+                if (!rule || rule.rule_set === undefined) return true;
+                const fixed = fixRuleSet(rule.rule_set);
+                if (fixed === null) return false;
+                rule.rule_set = fixed;
+                return true;
+            });
+        }
+    }
+
     buildRouteTarget(rule) {
         if (REJECT_ACTION_RULES.has(rule?.outbound) || rule?.outbound === 'REJECT') {
             return { action: 'reject' };
@@ -809,6 +846,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         // Validate outbounds: fill empty urltest groups with all proxies
         this.validateOutbounds();
         this.sanitizeLegacySpecialOutbounds();
+        this.sanitizeRuleSetReferences();
 
         const attachProtocolIfNeeded = (entry, rule) => {
             if (Array.isArray(rule?.protocol) && rule.protocol.length > 0) {
