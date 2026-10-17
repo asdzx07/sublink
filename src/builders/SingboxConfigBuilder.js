@@ -519,6 +519,26 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         }
     }
 
+    // Fix outbound references in selector/urltest groups (case mismatch for DIRECT etc.)
+    // A dangling reference makes sing-box fail with "dependency not found".
+    sanitizeOutboundReferences() {
+        const tagMap = new Map();
+        for (const o of this.config.outbounds || []) {
+            if (o?.tag) tagMap.set(o.tag.toLowerCase(), o.tag);
+        }
+        if (tagMap.size === 0) return;
+
+        for (const o of this.config.outbounds || []) {
+            if ((o?.type !== 'selector' && o?.type !== 'urltest') || !Array.isArray(o.outbounds)) continue;
+            o.outbounds = o.outbounds.map(ref => {
+                if (typeof ref !== 'string') return ref;
+                if (tagMap.has(ref)) return ref;
+                const fixed = tagMap.get(ref.toLowerCase());
+                return fixed || ref;
+            });
+        }
+    }
+
     buildRouteTarget(rule) {
         if (REJECT_ACTION_RULES.has(rule?.outbound) || rule?.outbound === 'REJECT') {
             return { action: 'reject' };
@@ -847,6 +867,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         this.validateOutbounds();
         this.sanitizeLegacySpecialOutbounds();
         this.sanitizeRuleSetReferences();
+        this.sanitizeOutboundReferences();
 
         const attachProtocolIfNeeded = (entry, rule) => {
             if (Array.isArray(rule?.protocol) && rule.protocol.length > 0) {
