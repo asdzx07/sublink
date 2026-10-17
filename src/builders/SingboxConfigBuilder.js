@@ -26,6 +26,13 @@ const TUN_ADDRESS_MERGES = {
 };
 const MODERN_HTTP_CLIENT_TIER = '1.14';
 const LEGACY_CONFIG_TIER = '1.11';
+// Every top-level key sing-box decodes. Anything else rejects the whole profile
+// ("json: unknown field ..."), which is how a pasted Clash/Surge config used to
+// break the output (unified-delay, find-process-mode, socks-port, ...).
+const SINGBOX_TOP_LEVEL_KEYS = new Set([
+    'log', 'dns', 'ntp', 'inbounds', 'outbounds', 'route', 'experimental',
+    'services', 'endpoints', 'http_clients'
+]);
 // Payment and banking apex domains. A stale optimistic-cache answer here can
 // fail a checkout or a bank login, so these queries opt out of the optimistic
 // cache. They resolve through the direct domestic resolver like other CN names,
@@ -852,6 +859,26 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         }
     }
 
+    /**
+     * Drop top-level keys that only exist in other clients' configs.
+     *
+     * A pasted Clash/Surge config can still override keys this builder does not
+     * know (unified-delay, find-process-mode, socks-port, hosts, sniffer, ...),
+     * and sing-box rejects the entire profile for a single unknown top-level
+     * field. Only keys that came from an imported config are filtered, so a
+     * user base config keeps whatever it declares.
+     */
+    dropForeignTopLevelKeys() {
+        if (!this.appliedOverrideKeys) {
+            return;
+        }
+        this.appliedOverrideKeys.forEach(key => {
+            if (!SINGBOX_TOP_LEVEL_KEYS.has(key)) {
+                delete this.config[key];
+            }
+        });
+    }
+
     formatConfig() {
         const rules = generateRules(this.selectedRules, this.customRules);
         const { site_rule_sets, ip_rule_sets } = generateRuleSets(this.selectedRules, this.customRules);
@@ -860,6 +887,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         this.configureRuleSetDownload();
         this.configureDnsRouting(site_rule_sets);
         this.applyDeprecationMigrations();
+        this.dropForeignTopLevelKeys();
 
         // Validate outbounds: fill empty urltest groups with all proxies
         this.validateOutbounds();

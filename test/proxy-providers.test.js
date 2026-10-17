@@ -41,13 +41,20 @@ const mockSingboxJson = JSON.stringify({
     ]
 });
 
+// A Clash payload with nothing to inline: the URL is then handed to the client
+// as a provider, which is the only remaining use of provider mode.
+const mockUnparseableClashYaml = `
+proxies: []
+proxy-groups: []
+`;
+
 describe('Auto Proxy Providers Detection', () => {
     afterEach(() => {
         vi.clearAllMocks();
     });
 
     describe('Clash Builder', () => {
-        it('should use Clash URL as proxy-provider when format is Clash YAML', async () => {
+        it('inlines a Clash subscription instead of emitting a provider', async () => {
             // Mock fetchSubscriptionWithFormat to return Clash format
             fetchSubscriptionWithFormat.mockResolvedValue({
                 content: mockClashYaml,
@@ -66,16 +73,41 @@ describe('Auto Proxy Providers Detection', () => {
             const yamlText = await builder.build();
             const config = yaml.load(yamlText);
 
-            // Should have proxy-providers
-            expect(config['proxy-providers']).toBeDefined();
+            // the profile has to carry its own nodes: a provider is downloaded
+            // again by the client with a different UA, and an airport that
+            // switches format by UA then answers in a format mihomo cannot read
+            expect(config.proxies.map(proxy => proxy.name)).toEqual(['HK-Node', 'JP-Node']);
+            expect(config['proxy-providers']).toBeUndefined();
+
+            const nodeSelect = config['proxy-groups'].find(g => g.name === '🚀 节点选择');
+            expect(nodeSelect.proxies).toEqual(expect.arrayContaining(['HK-Node', 'JP-Node']));
+            expect(nodeSelect.use).toBeUndefined();
+        });
+
+        it('falls back to a provider when the Clash payload has no nodes to inline', async () => {
+            fetchSubscriptionWithFormat.mockResolvedValue({
+                content: mockUnparseableClashYaml,
+                format: 'clash',
+                url: 'https://example.com/empty-clash-sub'
+            });
+
+            const builder = new ClashConfigBuilder(
+                'https://example.com/empty-clash-sub',
+                [],
+                [],
+                null,
+                'zh-CN',
+                'test-agent'
+            );
+            const config = yaml.load(await builder.build());
+
             expect(Object.keys(config['proxy-providers'])).toHaveLength(1);
             const providerName = Object.keys(config['proxy-providers'])[0];
             expect(providerName).toMatch(/^_auto_provider_[a-z0-9]+$/);
-            expect(config['proxy-providers'][providerName].url).toBe('https://example.com/clash-sub?token=xxx');
+            expect(config['proxy-providers'][providerName].url).toBe('https://example.com/empty-clash-sub');
             expect(config['proxy-providers'][providerName].type).toBe('http');
             expect(config['proxy-providers'][providerName].path).toBe(`./proxy_providers/${providerName}.yaml`);
 
-            // proxy-groups should have 'use' field
             const nodeSelect = config['proxy-groups'].find(g => g.name === '🚀 节点选择');
             expect(nodeSelect.use).toContain(providerName);
         });
@@ -227,16 +259,12 @@ describe('Auto Proxy Providers Detection', () => {
     });
 
     describe('Multiple URLs', () => {
-        it('should handle multiple Clash URLs as multiple providers', async () => {
-            let callCount = 0;
-            fetchSubscriptionWithFormat.mockImplementation((url) => {
-                callCount++;
-                return Promise.resolve({
-                    content: mockClashYaml,
-                    format: 'clash',
-                    url: url
-                });
-            });
+        it('should inline the nodes of multiple Clash URLs', async () => {
+            fetchSubscriptionWithFormat.mockImplementation((url) => Promise.resolve({
+                content: mockClashYaml,
+                format: 'clash',
+                url: url
+            }));
 
             const builder = new ClashConfigBuilder(
                 'https://example.com/sub1\nhttps://example.com/sub2',
@@ -249,20 +277,17 @@ describe('Auto Proxy Providers Detection', () => {
             const yamlText = await builder.build();
             const config = yaml.load(yamlText);
 
-            // Should have two proxy-providers
-            expect(config['proxy-providers']).toBeDefined();
-            const providerNames = Object.keys(config['proxy-providers']);
-            expect(providerNames).toHaveLength(2);
-            expect(new Set(providerNames).size).toBe(2);
-            expect(providerNames.every(name => name.startsWith('_auto_provider_'))).toBe(true);
+            // both subscriptions contribute their nodes, deduplicated by content
+            expect(config.proxies.map(proxy => proxy.name)).toEqual(['HK-Node', 'JP-Node']);
+            expect(config['proxy-providers']).toBeUndefined();
 
             const nodeSelect = config['proxy-groups'].find(g => g.name === '🚀 节点选择');
-            expect(nodeSelect.use).toEqual(expect.arrayContaining(providerNames));
+            expect(nodeSelect.proxies).toEqual(expect.arrayContaining(['HK-Node', 'JP-Node']));
         });
 
         it('should generate distinct stable Clash provider paths across separate builds', async () => {
             fetchSubscriptionWithFormat.mockImplementation((url) => Promise.resolve({
-                content: mockClashYaml,
+                content: mockUnparseableClashYaml,
                 format: 'clash',
                 url
             }));
@@ -299,7 +324,7 @@ describe('Auto Proxy Providers Detection', () => {
 
         it('should keep Clash provider name stable for the same URL', async () => {
             fetchSubscriptionWithFormat.mockImplementation((url) => Promise.resolve({
-                content: mockClashYaml,
+                content: mockUnparseableClashYaml,
                 format: 'clash',
                 url
             }));
@@ -361,7 +386,7 @@ describe('Auto Proxy Providers Detection', () => {
     describe('Config Merge Behaviors', () => {
         it('should not override user-defined Clash providers when auto providers exist', async () => {
             fetchSubscriptionWithFormat.mockResolvedValue({
-                content: mockClashYaml,
+                content: mockUnparseableClashYaml,
                 format: 'clash',
                 url: 'https://auto.example.com/clash-sub'
             });

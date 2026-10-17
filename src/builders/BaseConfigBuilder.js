@@ -97,42 +97,24 @@ export class BaseConfigBuilder {
                                 this.subscriptionUserinfo = subscriptionUserinfo;
                             }
 
-                            // If format is compatible with target client, use as provider
-                            if (this.isCompatibleProviderFormat(format)) {
+                            // Inline the nodes first: the generated profile must be
+                            // self-contained. The client re-downloads this link with
+                            // its own User-Agent, and an airport that switches format
+                            // by UA then answers in another one (e.g. base64 for
+                            // mihomo), which a Clash proxy-provider cannot parse - the
+                            // imported profile ends up with zero nodes.
+                            const result = parseSubscriptionContent(content);
+                            const inlineCount = await this.addParsedItems(result, parsedItems, {
+                                allowConfigOverrides: false
+                            });
+
+                            // Nothing to inline: fall back to handing the URL over as
+                            // a provider, which is still better than an empty profile.
+                            if (inlineCount === 0 && this.isCompatibleProviderFormat(format)) {
                                 this.providerUrls.push(originalUrl);
                                 // Content is already fetched; keep node names so country
                                 // groups can be built over provider members later.
                                 await this.collectProviderNodeNames(content);
-                                continue;  // Skip parsing, will be used as provider
-                            }
-
-                            // Otherwise parse the content as usual
-                            const result = parseSubscriptionContent(content);
-                            if (result && typeof result === 'object' && (result.type === 'yamlConfig' || result.type === 'singboxConfig' || result.type === 'surgeConfig')) {
-                                if (result.config) {
-                                    this.applyConfigOverrides(result.config);
-                                }
-                                if (Array.isArray(result.proxies)) {
-                                    result.proxies.forEach(proxy => {
-                                        if (proxy && typeof proxy === 'object' && proxy.tag) {
-                                            parsedItems.push(proxy);
-                                        }
-                                    });
-                                }
-                                continue;
-                            }
-                            // Handle array of URIs or other formats
-                            if (Array.isArray(result)) {
-                                for (const item of result) {
-                                    if (item && typeof item === 'object' && item.tag) {
-                                        parsedItems.push(item);
-                                    } else if (typeof item === 'string') {
-                                        const subResult = await ProxyParser.parse(item, this.userAgent);
-                                        if (subResult) {
-                                            parsedItems.push(subResult);
-                                        }
-                                    }
-                                }
                             }
                         }
                     } catch (error) {
@@ -143,38 +125,69 @@ export class BaseConfigBuilder {
 
                 // Non-HTTP URLs (protocol URIs like ss://, vmess://, etc.)
                 const result = await ProxyParser.parse(processedUrl, this.userAgent);
-                // Handle yamlConfig, singboxConfig, and surgeConfig types (they have the same structure)
-                if (result && typeof result === 'object' && (result.type === 'yamlConfig' || result.type === 'singboxConfig' || result.type === 'surgeConfig')) {
-                    if (result.config) {
-                        this.applyConfigOverrides(result.config);
-                    }
-                    if (Array.isArray(result.proxies)) {
-                        result.proxies.forEach(proxy => {
-                            if (proxy && typeof proxy === 'object' && proxy.tag) {
-                                parsedItems.push(proxy);
-                            }
-                        });
-                    }
-                    continue;
-                }
-                if (Array.isArray(result)) {
-                    for (const item of result) {
-                        if (item && typeof item === 'object' && item.tag) {
-                            parsedItems.push(item);
-                        } else if (typeof item === 'string') {
-                            const subResult = await ProxyParser.parse(item, this.userAgent);
-                            if (subResult) {
-                                parsedItems.push(subResult);
-                            }
-                        }
-                    }
-                } else if (result) {
-                    parsedItems.push(result);
-                }
+                await this.addParsedItems(result, parsedItems);
             }
         }
 
         return parsedItems;
+    }
+
+    /**
+     * Merge one parsed payload into the accumulated item list.
+     *
+     * A remote subscription contributes nodes only: its runtime sections
+     * (dns/route/inbounds/log/...) describe another client's setup, and copying
+     * them either conflicts with the generated config or leaves references to
+     * rule-sets this profile does not carry. Pasted configs keep the previous
+     * behaviour, where those sections are treated as a base config override.
+     *
+     * @param {object|Array|null} result - parseSubscriptionContent / ProxyParser output
+     * @param {Array} parsedItems - accumulator
+     * @param {{allowConfigOverrides?: boolean}} [options]
+     * @returns {Promise<number>} - number of proxies appended
+     */
+    async addParsedItems(result, parsedItems, options = {}) {
+        if (!result) {
+            return 0;
+        }
+        const { allowConfigOverrides = true } = options;
+
+        const isConfigResult = !Array.isArray(result) && typeof result === 'object'
+            && (result.type === 'yamlConfig' || result.type === 'singboxConfig' || result.type === 'surgeConfig');
+
+        if (isConfigResult) {
+            if (allowConfigOverrides && result.config) {
+                this.applyConfigOverrides(result.config);
+            }
+            let added = 0;
+            const proxies = Array.isArray(result.proxies) ? result.proxies : [];
+            proxies.forEach(proxy => {
+                if (proxy && typeof proxy === 'object' && proxy.tag) {
+                    parsedItems.push(proxy);
+                    added += 1;
+                }
+            });
+            return added;
+        }
+
+        const entries = Array.isArray(result) ? result : [result];
+        let added = 0;
+        for (const entry of entries) {
+            if (!entry) {
+                continue;
+            }
+            if (typeof entry === 'string') {
+                const parsed = await ProxyParser.parse(entry, this.userAgent);
+                if (parsed) {
+                    parsedItems.push(parsed);
+                    added += 1;
+                }
+            } else if (typeof entry === 'object' && entry.tag) {
+                parsedItems.push(entry);
+                added += 1;
+            }
+        }
+        return added;
     }
 
     /**

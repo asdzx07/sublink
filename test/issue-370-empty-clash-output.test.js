@@ -59,7 +59,7 @@ describe('Issues #370/#373/#277 - remote subscription decode and empty Clash out
         expect(result.content).toContain('HK-Plain');
     });
 
-    it('uses a plain Clash subscription URL as provider instead of emitting empty url-test groups', async () => {
+    it('inlines a plain Clash subscription URL instead of emitting empty url-test groups', async () => {
         mockFetchText(plainClashYaml);
 
         const builder = new ClashConfigBuilder(
@@ -72,12 +72,12 @@ describe('Issues #370/#373/#277 - remote subscription decode and empty Clash out
         );
         const built = yaml.load(await builder.build());
 
-        const providerName = Object.keys(built['proxy-providers'] ?? {})[0];
-        expect(providerName).toMatch(/^_auto_provider_[a-z0-9]+$/);
-        expect(built['proxy-providers'][providerName]?.url).toBe('https://example.com/plain-clash.yaml');
+        expect(built.proxies.map(proxy => proxy.name)).toEqual(['HK-Plain']);
+        expect(built['proxy-providers']).toBeUndefined();
 
         const autoSelect = built['proxy-groups'].find(group => group.name === '⚡ 自动选择');
-        expect(autoSelect.use).toEqual([providerName]);
+        expect(autoSelect.proxies).toContain('HK-Plain');
+        expect(autoSelect.use).toBeUndefined();
         expectNoEmptyUrlTestGroup(built);
     });
 

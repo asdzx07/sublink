@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import yaml from 'js-yaml';
 import { ClashConfigBuilder } from '../src/builders/ClashConfigBuilder.js';
 import { SingboxConfigBuilder } from '../src/builders/SingboxConfigBuilder.js';
-import { isInfoNodeName, getShareLinkName, INFO_NODE_PATTERN, encodeBase64, decodeBase64 } from '../src/utils.js';
+import { isInfoNodeName, getShareLinkName, encodeBase64, decodeBase64 } from '../src/utils.js';
 import { createApp } from '../src/app/createApp.jsx';
 import { MemoryKVAdapter } from '../src/adapters/kv/memoryKv.js';
 
@@ -70,7 +70,7 @@ describe('advertisement rows are not nodes', () => {
         expect(tags.some(tag => isInfoNodeName(tag))).toBe(false);
     });
 
-    it('excludes them inside remote providers as well', async () => {
+    it('excludes them when the Clash config comes from a subscription URL', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => ({
             ok: true,
             status: 200,
@@ -83,9 +83,10 @@ describe('advertisement rows are not nodes', () => {
                 'https://example.com/sub', 'minimal', [], null, 'zh-CN', 'clash-verge/v2.0.0'
             );
             const config = yaml.load(await builder.build());
-            const provider = Object.values(config['proxy-providers'])[0];
+            const names = config.proxies.map(proxy => proxy.name);
 
-            expect(provider['exclude-filter']).toBe(INFO_NODE_PATTERN);
+            expect(names).toContain('香港专线 01');
+            expect(names.some(name => isInfoNodeName(name))).toBe(false);
         } finally {
             vi.unstubAllGlobals();
         }
