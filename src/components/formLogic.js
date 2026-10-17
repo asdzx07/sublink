@@ -374,7 +374,21 @@ export const formLogicFn = (t) => {
                     // Construct URLs
                     const origin = window.location.origin;
                     const params = new URLSearchParams();
-                    params.append('config', this.input);
+                    // Oversized input goes to server-side storage; the URL carries only the ID
+                    const INLINE_INPUT_LIMIT = 2000;
+                    if (this.input && this.input.length > INLINE_INPUT_LIMIT) {
+                        const storeResp = await fetch('/store-input', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ input: this.input })
+                        });
+                        if (!storeResp.ok) {
+                            throw new Error(await storeResp.text() || 'Failed to store input');
+                        }
+                        params.append('inputId', (await storeResp.text()).trim());
+                    } else {
+                        params.append('config', this.input);
+                    }
                     params.append('ua', this.customUA);
                     params.append('selectedRules', JSON.stringify(this.selectedRules));
                     params.append('customRules', JSON.stringify(customRules));

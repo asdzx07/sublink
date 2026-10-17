@@ -70,7 +70,7 @@ export function createApp(bindings = {}) {
 
     app.get('/singbox', async (c) => {
         try {
-            const config = c.req.query('config');
+            const config = await resolveInputParam(c, services);
             if (!config) {
                 return c.text('Missing config parameter', 400);
             }
@@ -131,7 +131,7 @@ export function createApp(bindings = {}) {
 
     app.get('/clash', async (c) => {
         try {
-            const config = c.req.query('config');
+            const config = await resolveInputParam(c, services);
             if (!config) {
                 return c.text('Missing config parameter', 400);
             }
@@ -180,7 +180,7 @@ export function createApp(bindings = {}) {
 
     app.get('/surge', async (c) => {
         try {
-            const config = c.req.query('config');
+            const config = await resolveInputParam(c, services);
             if (!config) {
                 return c.text('Missing config parameter', 400);
             }
@@ -266,7 +266,7 @@ export function createApp(bindings = {}) {
     });
 
     app.get('/xray', async (c) => {
-        const inputString = c.req.query('config');
+        const inputString = await resolveInputParam(c, services);
         if (!inputString) {
             return c.text('Missing config parameter', 400);
         }
@@ -382,6 +382,27 @@ export function createApp(bindings = {}) {
             const storage = requireConfigStorage(services.configStorage);
             const configId = await storage.saveConfig(type, content);
             return c.text(configId);
+        } catch (error) {
+            if (error instanceof SyntaxError) {
+                return c.text(`Invalid format: ${error.message}`, 400);
+            }
+            return handleError(c, error, runtime.logger);
+        }
+    });
+
+    // Store oversized conversion input server-side; the conversion URL then
+    // carries only the returned inputId instead of a multi-KB query string.
+    app.post('/store-input', async (c) => {
+        try {
+            const { input } = await c.req.json();
+            if (typeof input !== 'string' || !input.trim()) {
+                return c.text('Missing input', 400);
+            }
+            const storage = requireConfigStorage(services.configStorage);
+            // JSON-encode: saveConfig requires JSON-serializable content,
+            // getConfigById JSON-parses it back to the raw string.
+            const inputId = await storage.saveConfig('input', JSON.stringify(input));
+            return c.text(inputId);
         } catch (error) {
             if (error instanceof SyntaxError) {
                 return c.text(`Invalid format: ${error.message}`, 400);
@@ -586,6 +607,27 @@ function requireConfigStorage(service) {
         throw new MissingDependencyError('Config storage functionality is unavailable');
     }
     return service;
+}
+
+/**
+ * Resolve the conversion input: prefer `inputId` (server-side stored large
+ * input) over the inline `config` query param. Returns null when neither
+ * is present.
+ */
+async function resolveInputParam(c, services) {
+    const inputId = c.req.query('inputId');
+    if (inputId) {
+        try {
+            const storage = requireConfigStorage(services.configStorage);
+            const stored = await storage.getConfigById(inputId);
+            // Stored inputs are saved as raw strings (may be JSON-encoded)
+            if (typeof stored === 'string') return stored;
+            if (stored != null) return typeof stored === 'object' ? JSON.stringify(stored) : String(stored);
+        } catch {
+            // fall through to inline config
+        }
+    }
+    return c.req.query('config') || null;
 }
 
 function handleError(c, error, logger) {
