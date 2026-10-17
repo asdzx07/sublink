@@ -637,3 +637,4 @@ function handleError(c, error, logger) {
     logger.error?.('Unhandled error', error);
     return c.text(`Error: ${error.message}`, 500);
 }
+// force rebuild 20261017171454
