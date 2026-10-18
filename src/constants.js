@@ -1,9 +1,12 @@
 // Application constants
 export const APP_NAME = 'Sublink Worker';
+// 语义版本号：只在自己发版时手动递增。必须保持纯点分数字
+// （Layout.jsx 的 compareVersions 用 split('.').map(Number) 比较，
+//  带 -dev 之类的后缀会变成 NaN 导致更新提示失效）
 export const APP_VERSION = '2.4.2';
-// 构建时由 esbuild define 注入；本地直接跑源码时回退为 'dev'
-export const COMMIT_SHA = typeof __COMMIT_SHA__ !== 'undefined' ? __COMMIT_SHA__ : 'dev';
-export const BUILD_TIME = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : '';
+// 构建信息由 scripts/gen-build-info.mjs 生成：BUILD_NUMBER 是从
+// build-baseline.txt 起算的提交次数，页脚显示为 v2.4.2-001
+export { BUILD_NUMBER, COMMIT_SHA, BUILD_TIME } from './buildInfo.js';
 export const GITHUB_REPO = 'https://github.com/asdzx07/sublink';
 export const GITHUB_API_RELEASES = 'https://api.github.com/repos/asdzx07/sublink/releases/latest';
 // Original upstream project this fork is based on

@@ -1,6 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
-import { APP_NAME, GITHUB_REPO, UPSTREAM_REPO, DOCS_URL, APP_VERSION, COMMIT_SHA, BUILD_TIME } from '../constants.js';
+import { APP_NAME, GITHUB_REPO, UPSTREAM_REPO, DOCS_URL, APP_VERSION, BUILD_NUMBER, COMMIT_SHA, BUILD_TIME } from '../constants.js';
 
 export const Footer = () => {
     const currentYear = new Date().getFullYear();
@@ -21,9 +21,9 @@ export const Footer = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-mono"
-                            title={BUILD_TIME ? `构建时间 ${BUILD_TIME}，点击查看 commit` : '点击查看 commit'}
+                            title={BUILD_TIME ? `构建 #${BUILD_NUMBER} · commit ${COMMIT_SHA} · ${BUILD_TIME}，点击查看 commit` : '点击查看 commit'}
                         >
-                            v{APP_VERSION}-{COMMIT_SHA}
+                            v{APP_VERSION}-{BUILD_NUMBER}
                         </a>
                     </div>
 
