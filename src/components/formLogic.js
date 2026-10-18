@@ -104,7 +104,6 @@ export const formLogicFn = (t) => {
             shortenedLinks: null,
             shortening: false,
             customShortCode: '',
-            linkTtl: '2592000',
             parsingUrl: false,
             parseDebounceTimer: null,
             // These will be populated from window.APP_TRANSLATIONS
@@ -460,10 +459,6 @@ export const formLogicFn = (t) => {
                             // For subsequent requests, use the code from first request
                             if (shortCode) {
                                 apiUrl += `&shortCode=${encodeURIComponent(shortCode)}`;
-                            }
-                            // Per-link validity period in seconds (0 = permanent)
-                            if (this.linkTtl !== undefined && this.linkTtl !== '') {
-                                apiUrl += `&ttl=${encodeURIComponent(this.linkTtl)}`;
                             }
 
                             const response = await fetch(apiUrl);
