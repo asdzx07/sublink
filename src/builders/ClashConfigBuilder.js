@@ -332,27 +332,14 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     ...(minIdleSession !== undefined ? { 'min-idle-session': minIdleSession } : {}),
                 };
             }
-            case 'naive': {
-                // mihomo has no naive outbound (a `type: naive` entry fails the
-                // whole profile check), but a naive server is an HTTP CONNECT
-                // proxy over TLS, which mihomo's http outbound speaks natively.
-                // Same mapping sb-onekey uses for its own Clash subscription;
-                // the padding layer is lost, the tunnel is identical.
-                return {
-                    name: proxy.tag,
-                    type: 'http',
-                    server: proxy.server,
-                    port: proxy.server_port,
-                    ...(proxy.username ? { username: proxy.username } : {}),
-                    ...(proxy.password ? { password: proxy.password } : {}),
-                    tls: true,
-                    ...(proxy.tls?.server_name ? { sni: proxy.tls.server_name } : {}),
-                    'skip-cert-verify': !!proxy.tls?.insecure,
-                    // no Cronet stack in mihomo; a chrome uTLS fingerprint on
-                    // the CONNECT handshake is the closest disguise available
-                    'client-fingerprint': 'chrome',
-                };
-            }
+            case 'naive':
+                // mihomo cannot use a naive node at all: it has no naive
+                // outbound type, and mapping to `type: http` does not work
+                // either - a sing-box naive inbound rejects plain CONNECT
+                // requests that lack the naive padding ("missing naive
+                // padding", verified live 2026-10-23) and offers no switch
+                // to relax it. Skip the node for Clash output.
+                return null;
             default:
                 return proxy; // Return as-is if no specific conversion is defined
         }

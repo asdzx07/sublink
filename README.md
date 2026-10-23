@@ -41,7 +41,7 @@
 ## ✨ 核心特性
 
 ### 🌐 全协议与输入格式支持
-- **协议全覆盖**：Shadowsocks (含 SIP002/SIP003 插件)、VMess、VLESS (Reality/TLS)、Hysteria2 (含端口跳跃)、Trojan、TUIC、AnyTLS、Naive（sing-box 原生输出；Clash 映射为 `type: http` + TLS 的 CONNECT 代理，与 sb-onekey 自带订阅一致）。
+- **协议全覆盖**：Shadowsocks (含 SIP002/SIP003 插件)、VMess、VLESS (Reality/TLS)、Hysteria2 (含端口跳跃)、Trojan、TUIC、AnyTLS、Naive（仅 sing-box 输出；mihomo 无 naive 类型且其入站强制 padding 校验，Clash 输出时自动跳过）。
 - **多输入格式自适应**：
   - 标准 Base64 编码订阅
   - 单条/多条原生协议节点 URI
