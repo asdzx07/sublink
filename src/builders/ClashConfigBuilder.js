@@ -332,6 +332,23 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     ...(minIdleSession !== undefined ? { 'min-idle-session': minIdleSession } : {}),
                 };
             }
+            case 'naive': {
+                return {
+                    name: proxy.tag,
+                    type: 'naive',
+                    server: proxy.server,
+                    port: proxy.server_port,
+                    ...(proxy.username ? { username: proxy.username } : {}),
+                    ...(proxy.password ? { password: proxy.password } : {}),
+                    // sing-box carries the transport as a quic flag; mihomo
+                    // spells it as a protocol name instead
+                    protocol: proxy.quic ? 'quic' : 'https',
+                    tls: true,
+                    ...(proxy.tls?.server_name ? { sni: proxy.tls.server_name } : {}),
+                    'skip-cert-verify': !!proxy.tls?.insecure,
+                    udp: getClashUdpValue(proxy),
+                };
+            }
             default:
                 return proxy; // Return as-is if no specific conversion is defined
         }

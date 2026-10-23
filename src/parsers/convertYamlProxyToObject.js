@@ -259,6 +259,24 @@ export function convertYamlProxyToObject(p) {
                 tls
             };
         }
+        case 'naive': {
+            return {
+                tag: name,
+                type: 'naive',
+                server: p.server,
+                server_port: parseInt(p.port, 10),
+                username: p.username,
+                password: p.password,
+                // mihomo picks the transport by name; sing-box wants a flag
+                ...(String(p.protocol).toLowerCase() === 'quic' ? { quic: true } : {}),
+                udp: !!p.udp,
+                tls: {
+                    enabled: true,
+                    server_name: p.sni,
+                    insecure: !!p['skip-cert-verify']
+                }
+            };
+        }
         default:
             return null;
     }
