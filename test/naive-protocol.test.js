@@ -62,21 +62,22 @@ describe('Naive protocol support', () => {
         });
     });
 
-    it('emits a mihomo naive proxy from a share link', async () => {
+    it('maps naive to a mihomo http proxy (mihomo has no naive type)', async () => {
         const builder = new ClashConfigBuilder(QUIC_URI, 'minimal', [], null, 'zh-CN', 'clash-verge/v2.0.0');
         const config = yaml.load(await builder.build());
-        const proxy = config.proxies.find(p => p.type === 'naive');
+        const proxy = (config.proxies || []).find(p => p.name === 'Naive QUIC');
         expect(proxy).toMatchObject({
-            name: 'Naive QUIC',
+            type: 'http',
             server: 'quic.example.com',
             port: 443,
             username: 'user2',
             password: 'pass2',
-            protocol: 'quic',
             tls: true,
             sni: 'sni.example.com',
-            'skip-cert-verify': true
+            'skip-cert-verify': true,
+            'client-fingerprint': 'chrome'
         });
+        expect((config.proxies || []).find(p => p.type === 'naive')).toBeUndefined();
     });
 
     it('converts a mihomo naive proxy to sing-box (protocol name becomes the quic flag)', async () => {
@@ -109,7 +110,7 @@ describe('Naive protocol support', () => {
         expect(outbound).not.toHaveProperty('udp');
     });
 
-    it('converts a sing-box naive outbound to mihomo', async () => {
+    it('maps a sing-box naive outbound to a mihomo http proxy as well', async () => {
         const singboxJson = JSON.stringify({
             outbounds: [
                 { type: 'naive', tag: 'Naive JSON', server: 'json.example.com', server_port: 443, username: 'ju', password: 'jp', tls: { enabled: true, server_name: 'jsni.example.com', insecure: false } },
@@ -118,16 +119,17 @@ describe('Naive protocol support', () => {
         });
         const builder = new ClashConfigBuilder(singboxJson, 'minimal', [], null, 'zh-CN', 'clash-verge/v2.0.0');
         const config = yaml.load(await builder.build());
-        const proxy = config.proxies.find(p => p.type === 'naive');
+        const proxy = (config.proxies || []).find(p => p.name === 'Naive JSON');
         expect(proxy).toMatchObject({
-            name: 'Naive JSON',
+            type: 'http',
             server: 'json.example.com',
             port: 443,
             username: 'ju',
-            protocol: 'https',
+            password: 'jp',
             tls: true,
             sni: 'jsni.example.com',
-            'skip-cert-verify': false
+            'skip-cert-verify': false,
+            'client-fingerprint': 'chrome'
         });
     });
 });

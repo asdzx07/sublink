@@ -333,20 +333,24 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 };
             }
             case 'naive': {
+                // mihomo has no naive outbound (a `type: naive` entry fails the
+                // whole profile check), but a naive server is an HTTP CONNECT
+                // proxy over TLS, which mihomo's http outbound speaks natively.
+                // Same mapping sb-onekey uses for its own Clash subscription;
+                // the padding layer is lost, the tunnel is identical.
                 return {
                     name: proxy.tag,
-                    type: 'naive',
+                    type: 'http',
                     server: proxy.server,
                     port: proxy.server_port,
                     ...(proxy.username ? { username: proxy.username } : {}),
                     ...(proxy.password ? { password: proxy.password } : {}),
-                    // sing-box carries the transport as a quic flag; mihomo
-                    // spells it as a protocol name instead
-                    protocol: proxy.quic ? 'quic' : 'https',
                     tls: true,
                     ...(proxy.tls?.server_name ? { sni: proxy.tls.server_name } : {}),
                     'skip-cert-verify': !!proxy.tls?.insecure,
-                    udp: getClashUdpValue(proxy),
+                    // no Cronet stack in mihomo; a chrome uTLS fingerprint on
+                    // the CONNECT handshake is the closest disguise available
+                    'client-fingerprint': 'chrome',
                 };
             }
             default:
