@@ -222,6 +222,60 @@ export function groupProxiesByCountry(proxies, { getName } = {}) {
 	return grouped;
 }
 
+// Core regions keep their own group even with a single node: they are the
+// regions users pick from most, and folding them away would hide them.
+// Any other country with fewer than MIN_INDEPENDENT_NODES nodes is folded
+// into its continent group, so a long tail of one-node countries does not
+// turn into a wall of single-node url-test groups.
+export const CORE_COUNTRY_CODES = new Set(['CN', 'HK', 'TW', 'JP', 'KR', 'SG', 'US']);
+const MIN_INDEPENDENT_NODES = 2;
+
+const CONTINENT_BY_COUNTRY_CODE = {
+	HK: 'Asia', TW: 'Asia', JP: 'Asia', KR: 'Asia', SG: 'Asia', IN: 'Asia',
+	MY: 'Asia', TH: 'Asia', VN: 'Asia', PH: 'Asia', ID: 'Asia', AE: 'Asia',
+	GB: 'Europe', DE: 'Europe', FR: 'Europe', RU: 'Europe', NL: 'Europe',
+	CH: 'Europe', SE: 'Europe', IT: 'Europe', ES: 'Europe', IE: 'Europe',
+	TR: 'Europe', US: 'Americas', CA: 'Americas', BR: 'Americas',
+	AR: 'Americas', AU: 'Oceania', NZ: 'Oceania', ZA: 'Africa'
+};
+
+const CONTINENT_META = {
+	Asia: { name: '亚洲', emoji: '🌏' },
+	Europe: { name: '欧洲', emoji: '🌍' },
+	Americas: { name: '美洲', emoji: '🌎' },
+	Oceania: { name: '大洋洲', emoji: '🏝️' },
+	Africa: { name: '非洲', emoji: '🌍' }
+};
+
+export function foldCountryGroups(countryGroups) {
+	if (!countryGroups || typeof countryGroups !== 'object') return countryGroups;
+	const folded = {};
+	const continentGroups = {};
+	for (const [key, group] of Object.entries(countryGroups)) {
+		if (!group || !Array.isArray(group.proxies) || group.proxies.length === 0) {
+			// Provider-only and empty groups carry no inline nodes to fold;
+			// leave them untouched so their provider filter keeps working.
+			folded[key] = group;
+			continue;
+		}
+		const continent = CONTINENT_BY_COUNTRY_CODE[group.code];
+		if (!continent || CORE_COUNTRY_CODES.has(group.code) || group.proxies.length >= MIN_INDEPENDENT_NODES) {
+			folded[key] = group;
+			continue;
+		}
+		if (!continentGroups[continent]) {
+			continentGroups[continent] = { ...CONTINENT_META[continent], aliases: [], proxies: [] };
+		}
+		continentGroups[continent].aliases.push(...(group.aliases || []));
+		continentGroups[continent].proxies.push(...group.proxies);
+	}
+	for (const [continent, group] of Object.entries(continentGroups)) {
+		const name = `${group.name}其他`;
+		folded[name] = { ...group, name, code: `FOLDED_${continent.toUpperCase()}` };
+	}
+	return folded;
+}
+
 export function createStableProviderName(url) {
 	if (typeof url !== 'string' || url.trim() === '') {
 		throw new Error('Provider URL must be a non-empty string');

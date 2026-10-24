@@ -1,8 +1,8 @@
 
 import { SING_BOX_CONFIG, generateRuleSets, generateRules, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES, REJECT_ACTION_RULES } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
-import { deepCopy, groupProxiesByCountry } from '../utils.js';
-import { addProxyWithDedup } from './helpers/proxyHelpers.js';
+import { deepCopy, groupProxiesByCountry, foldCountryGroups } from '../utils.js';
+import { addProxyWithDedup, isSamePhysicalProxy, proxyFingerprint } from './helpers/proxyHelpers.js';
 import { buildSelectorMembers as buildSelectorMemberList, buildNodeSelectMembers, buildCustomRuleMembers, uniqueNames } from './helpers/groupBuilder.js';
 import { normalizeGroupName } from './helpers/groupNameUtils.js';
 
@@ -174,12 +174,10 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
             setName: (item, name) => {
                 if (item) item.tag = name;
             },
-            isSame: (existing = {}, incoming = {}) => {
-                const { tag: _incomingTag, ...restIncoming } = incoming;
-                const { tag: _existingTag, ...restExisting } = existing;
-                return JSON.stringify(restIncoming) === JSON.stringify(restExisting);
-            },
+            isSame: isSamePhysicalProxy,
             getSignature: (item = {}) => {
+                const fingerprint = proxyFingerprint(item);
+                if (fingerprint !== null) return fingerprint;
                 const { tag: _t, ...rest } = item;
                 return JSON.stringify(rest);
             }
@@ -302,9 +300,9 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
 
     addCountryGroups() {
         const proxies = this.getProxies();
-        const countryGroups = groupProxiesByCountry(proxies, {
+        const countryGroups = foldCountryGroups(groupProxiesByCountry(proxies, {
             getName: proxy => this.getProxyName(proxy)
-        });
+        }));
 
         const existingTags = new Set((this.config.outbounds || []).map(o => normalizeGroupName(o?.tag)).filter(Boolean));
 

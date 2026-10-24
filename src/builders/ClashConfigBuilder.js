@@ -1,8 +1,8 @@
 import yaml from 'js-yaml';
 import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES, REJECT_ACTION_RULES } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
-import { deepCopy, groupProxiesByCountry, buildCountryNameFilter, INFO_NODE_PATTERN } from '../utils.js';
-import { addProxyWithDedup } from './helpers/proxyHelpers.js';
+import { deepCopy, groupProxiesByCountry, foldCountryGroups, buildCountryNameFilter, INFO_NODE_PATTERN } from '../utils.js';
+import { addProxyWithDedup, isSamePhysicalProxy } from './helpers/proxyHelpers.js';
 import { buildSelectorMembers, buildNodeSelectMembers, buildCustomRuleMembers, uniqueNames } from './helpers/groupBuilder.js';
 import { emitClashRules, sanitizeClashProxyGroups } from './helpers/clashConfigUtils.js';
 import { normalizeGroupName, findGroupIndexByName } from './helpers/groupNameUtils.js';
@@ -72,6 +72,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         this.customRules = customRules;
         this.countryGroupNames = [];
         this.manualGroupName = null;
+        this.userProxyGroupNames = new Set();
         this.enableClashUI = enableClashUI;
         this.externalController = externalController;
         this.externalUiDownloadUrl = externalUiDownloadUrl;
@@ -352,11 +353,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             setName: (item, name) => {
                 if (item) item.name = name;
             },
-            isSame: (a = {}, b = {}) => {
-                const { name: _name, ...restOfProxy } = b;
-                const { name: __name, ...restOfExisting } = a;
-                return JSON.stringify(restOfProxy) === JSON.stringify(restOfExisting);
-            }
+            isSame: isSamePhysicalProxy
         });
     }
 
@@ -516,9 +513,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
     addCountryGroups() {
         const proxies = this.getProxies();
-        const countryGroups = groupProxiesByCountry(proxies, {
+        const countryGroups = foldCountryGroups(groupProxiesByCountry(proxies, {
             getName: proxy => this.getProxyName(proxy)
-        });
+        }));
 
         // Provider mode leaves no inline proxies, but mihomo can filter provider
         // members per group (`use` + `filter`), so enumerate countries from the
@@ -627,6 +624,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         userGroups.forEach(userGroup => {
             if (!userGroup?.name) return;
+            this.userProxyGroupNames.add(normalizeGroupName(userGroup.name));
 
             const existingIndex = findGroupIndexByName(
                 this.config['proxy-groups'],
@@ -681,28 +679,50 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     }
 
     /**
-     * Reject invalid proxy groups before final output.
-     * Why: empty groups make Clash reject the whole config, so we should fail fast
-     * instead of masking the upstream merge/parsing problem.
+     * Empty url-test/fallback groups make Clash reject the whole config.
+     * User-defined empty groups still fail fast, so a bad input config is
+     * not silently masked. System-generated empty groups are cascade-pruned
+     * instead: drop the group, strip its name from every other group, and
+     * repeat, since pruning one group can empty another that only referenced it.
      */
     validateProxyGroups() {
-        (this.config['proxy-groups'] || []).forEach(group => {
+        const isEmptyGroup = (group) => {
             const requiresMembers = group?.type === 'url-test' || group?.type === 'fallback';
-            if (!requiresMembers) {
-                return;
-            }
-
+            if (!requiresMembers) return false;
             const hasProxyRefs = Array.isArray(group.proxies) && group.proxies.length > 0;
             const hasProviderRefs = Array.isArray(group.use) && group.use.length > 0;
-            if (hasProxyRefs || hasProviderRefs) {
-                return;
-            }
+            return !hasProxyRefs && !hasProviderRefs;
+        };
 
-            const groupName = group?.name || '(unnamed group)';
-            throw new InvalidConfigError(
-                `Invalid proxy group "${groupName}": type "${group.type}" requires at least one proxy or provider reference`
+        for (const group of this.config['proxy-groups'] || []) {
+            if (!isEmptyGroup(group)) continue;
+            if (this.userProxyGroupNames.has(normalizeGroupName(group?.name))) {
+                const groupName = group?.name || '(unnamed group)';
+                throw new InvalidConfigError(
+                    `Invalid proxy group "${groupName}": type "${group.type}" requires at least one proxy or provider reference`
+                );
+            }
+        }
+
+        let pruned;
+        do {
+            pruned = false;
+            const groups = this.config['proxy-groups'] || [];
+            const emptyNames = new Set(
+                groups.filter(isEmptyGroup).map(group => normalizeGroupName(group?.name)).filter(Boolean)
             );
-        });
+            if (emptyNames.size === 0) break;
+            this.config['proxy-groups'] = groups
+                .filter(group => !emptyNames.has(normalizeGroupName(group?.name)))
+                .map(group => {
+                    if (!group || !Array.isArray(group.proxies)) return group;
+                    return {
+                        ...group,
+                        proxies: group.proxies.filter(proxy => !emptyNames.has(normalizeGroupName(proxy)))
+                    };
+                });
+            pruned = true;
+        } while (pruned);
     }
 
     // 生成规则

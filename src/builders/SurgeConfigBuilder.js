@@ -1,5 +1,5 @@
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
-import { groupProxiesByCountry } from '../utils.js';
+import { groupProxiesByCountry, foldCountryGroups } from '../utils.js';
 import { SURGE_CONFIG, SURGE_SITE_RULE_SET_BASEURL, SURGE_IP_RULE_SET_BASEURL, generateRules, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES, REJECT_ACTION_RULES } from '../config/index.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
 import { buildSelectorMembers, buildNodeSelectMembers, buildCustomRuleMembers, uniqueNames } from './helpers/groupBuilder.js';
@@ -326,9 +326,9 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
 
     addCountryGroups() {
         const proxies = this.getValidProxies();
-        const countryGroups = groupProxiesByCountry(proxies, {
+        const countryGroups = foldCountryGroups(groupProxiesByCountry(proxies, {
             getName: proxy => this.getProxyName(proxy)
-        });
+        }));
 
         const existing = new Set((this.config['proxy-groups'] || [])
             .map(g => this.getGroupName(g)?.trim())
